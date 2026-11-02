@@ -1,6 +1,14 @@
 node_modules/
-# Nintendo Mii resource required by FFL.js. Local only. Do not commit.
-public/ffl/
+# Include only the resource and audio used by the class prototype.
+public/ffl/**
+!public/ffl/**/
+!public/ffl/asset/model/character/mii/AFLResHigh_2_3.dat
+!public/ffl/music/mii-channel-editing.mp3
+!public/ffl/sfx/samples/Sample_0005.wav
+!public/ffl/sfx/samples/Sample_0014.wav
+!public/ffl/sfx/samples/Sample_0015.wav
+!public/ffl/sfx/samples/Sample_0016.wav
+!public/ffl/sfx/samples/Sample_0025.wav
 dist/
 build/
 .cache/

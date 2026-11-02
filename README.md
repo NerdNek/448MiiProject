@@ -71,18 +71,18 @@ Replace `YOUR_USERNAME` with the repository owner's GitHub username, or copy the
 
 ## Mii preview resource
 
-The 3D FFL preview and feature thumbnails need `AFLResHigh_2_3.dat` at `public/ffl/asset/model/character/mii/AFLResHigh_2_3.dat`. This local resource is not included in the repository. Without it, the app uses an approximate fallback preview and FFL thumbnails are unavailable. See [credits and resource details](CREDITS.md).
+The 3D FFL preview and feature thumbnails need `AFLResHigh_2_3.dat` at `public/ffl/asset/model/character/mii/AFLResHigh_2_3.dat`. The repository includes this resource. If it is removed or cannot load, the app uses an approximate fallback preview and FFL thumbnails are unavailable. See [credits and resource details](CREDITS.md).
 
 
 The FFL head sits on a handmade body in `src/mii-body.ts`. Its proportions follow Mii Channel screenshots, but it is not Nintendo's Wii body model.
 
 ### Optional background music
 
-The Music button plays and pauses a user-supplied local track. To enable it, place the audio file at `public/ffl/music/mii-channel-editing.mp3`. The `public/ffl/` directory is gitignored, so the track is not included in the repository. Music starts only when the button is pressed. Vite may copy the local music and 3D resource into `dist/` when building; check build contents before sharing or deploying.
+The Music button plays the included track at `public/ffl/music/mii-channel-editing.mp3`. Music starts only when the button is pressed. Vite copies the music and 3D resource into `dist/` when building.
 
 ### Optional sound effects
 
-Interface sounds use local copies of Mii Channel samples (see [credits](CREDITS.md)). Copy `Sample_0000.wav`–`Sample_0026.wav` from the downloaded "Sound Effects" sheet into `public/ffl/sfx/samples/`. Like the music, they are gitignored, and the production build removes `ffl/sfx/` from `dist/` so they are not published. Without the files, the button next to Music reads **Sounds unavailable** and the app is silent.
+The five Mii Channel samples used by the development app are included in `public/ffl/sfx/samples/` (see [credits](CREDITS.md)). The production build removes `ffl/sfx/` from `dist/`, so the built site runs without sound effects. If the files are missing, the button reads **Sounds unavailable**.
 
 | Action | Sample | Played by |
 | --- | --- | --- |
@@ -92,7 +92,7 @@ Interface sounds use local copies of Mii Channel samples (see [credits](CREDITS.
 | Adjust a value | `Sample_0005` | ± buttons, birthday menus, sliders (one tick per key press; silent while dragging or holding a key, then one tick on release) |
 | Save / confirm | `Sample_0025` | Save Mii, Restore saved Mii, Confirm name |
 
-The mapping and per-sound levels are in `src/sfx.ts`. **Mute sounds** is separate from the music control and is remembered in this browser. The mapping was chosen from acoustic measurements (pitch, envelope, and onset analysis), not from Nintendo's original assignments, which are not recorded in the sample sheet. To audition all 27 samples and pick a different mapping, run the dev server and open `/tools/sfx-audition.html`.
+The mapping and per-sound levels are in `src/sfx.ts`. **Mute sounds** is separate from the music control and is remembered in this browser. The mapping was chosen from acoustic measurements (pitch, envelope, and onset analysis), not from Nintendo's original assignments, which are not recorded in the sample sheet. The other samples from the source sheet are not included.
 
 ## How to use the prototype
 
@@ -113,7 +113,7 @@ These are implementation limits, not results from a user test:
 - **Keyboard:** arrows move focus, Enter selects, Esc returns to Face, and Ctrl/Cmd+Z and Ctrl/Cmd+Shift+Z undo and redo. Text fields keep normal text undo. Gamepad controls are not implemented.
 - **Long lists** such as hair and eyes are shown 12 at a time, with previous/next controls and page-dot indicators (screen readers still hear the page and range). Color controls stay above the list.
 - **Colors:** Skin, hair, eyes, mouth, and glasses frames offer preset swatches and a Custom color picker with hue, saturation, and brightness controls. The selected hex is saved with the Mii. The FFL preview tints its materials and face textures to approximate custom colors; shading and feature artwork affect the visible result. Some mouth styles do not have a colorable region. The fallback preview is approximate and does not reproduce every custom feature color.
-- **3D preview** needs the local Miitomo resource described above. Without it, the page uses the approximate fallback preview.
+- **3D preview** needs the included Miitomo resource described above. Without it, the page uses the approximate fallback preview.
 - The head is drawn with FFL.js's Wii U shader port, not Nintendo's original Wii renderer.
 
 ## Code structure

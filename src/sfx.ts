@@ -4,7 +4,7 @@ export type SfxAction = "select" | "focus" | "back" | "adjust" | "save"
 
 /**
  * Mii Channel samples from The Sounds Resource "Sound Effects" sheet (see CREDITS.md).
- * Files are local copies under public/ffl/sfx/samples/, which is gitignored.
+ * The five samples used by the app are under public/ffl/sfx/samples/.
  * gain brings each sample to roughly -20 dBFS RMS before the master level;
  * minGapMs drops repeats that arrive faster than that.
  */
