@@ -1112,6 +1112,7 @@ const keyboardRows = [
 ]
 
 export default function App() {
+  const [hintMode, setHintMode] = useState<"keyboard" | "wii">("keyboard")
   const [category, setCategory] = useState<CategoryId>("face")
   const [lastByGroup, setLastByGroup] = useState<Record<string, CategoryId>>({})
   const goTo = useCallback((id: CategoryId) => {
@@ -1960,20 +1961,31 @@ export default function App() {
             <kbd>Ctrl Shift Z</kbd>
           </button>
         </div>
-        <div className="controller-guide">
-          <span>
-            <b>Arrows</b> Browse choices; adjust sliders; turn focused preview
-          </span>
-          <span>
-            <b>Tab</b> Next control
-          </span>
-          <span>
-            <b>Enter</b> Select
-          </span>
-          <span>
-            <b>Esc</b> Leave controls / back to Face
-          </span>
-          <span className="keyboard-guide">Ctrl or ⌘ Z undoes. Shift adds redo. Text fields keep their own undo.</span>
+        <div className="hint-area">
+          <div className="hint-switch" role="group" aria-label="Control hint display">
+            <button type="button" aria-pressed={hintMode === "keyboard"} onClick={() => setHintMode("keyboard")}>Keyboard</button>
+            <button type="button" aria-pressed={hintMode === "wii"} onClick={() => setHintMode("wii")}>Wii Remote</button>
+          </div>
+          {hintMode === "keyboard" ? <div className="controller-guide">
+            <span><b>Tab</b> Next</span><span><b>Arrows</b> Move / adjust</span><span><b>Enter</b> Select</span><span><b>Esc</b> Back</span>
+          </div> : <div className="controller-guide wii-hints" aria-label="Proposed Wii Remote controls">
+            <span><img src="/assets/kenney-wii/wii_controller.svg" alt="" /> Point</span>
+            <span><img src="/assets/kenney-wii/wii_button_a.svg" alt="" /> Select / drag</span>
+            <span><img src="/assets/kenney-wii/wii_button_b.svg" alt="" /> Back</span>
+            <span><img src="/assets/kenney-wii/wii_dpad_all.svg" alt="" /> Scroll / adjust</span>
+          </div>}
+          <details className="hint-details">
+            <summary>Controls {hintMode === "wii" ? "· mock" : "· more"}</summary>
+            {hintMode === "keyboard" ? <div className="hint-details-content">
+              <p>Tab / Shift+Tab moves between controls. Arrows browse choices, adjust sliders, and turn the focused preview; Home resets its view. Enter or Space activates buttons.</p>
+              <p>Esc leaves the current control or returns to Face. Ctrl/⌘+Z undoes; Ctrl/⌘+Shift+Z or Ctrl+Y redoes. Text fields keep their own undo.</p>
+            </div> : <div className="hint-details-content">
+              <strong>Proposed controls · visual mock only</strong>
+              <p>Point and press A to use tabs, choices, pages, menus, audio, the on-screen keyboard, undo, redo, reset, save and restore. Hold A and move to drag a slider or turn the preview.</p>
+              <p>B would close a menu or return to the category. The D-pad would scroll the panel or adjust a focused slider. For custom colors, a controller-friendly picker would be needed in place of the system picker.</p>
+              <p>Wii Remote input is not implemented. Use the mouse and keyboard to operate this prototype.</p>
+            </div>}
+          </details>
         </div>
         <div className="primary-actions">
           <button

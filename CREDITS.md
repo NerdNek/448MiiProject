@@ -4,6 +4,8 @@ This is an unofficial educational UI/UX prototype inspired by Nintendo's Wii Mii
 
 ## Artwork and resources
 
+- **Wii Remote button prompts:** Kenney, [Input Prompts](https://kenney.nl/assets/input-prompts), CC0. The Wii Remote hints are a visual mockup; controller input is not implemented.
+
 - **Wii Mii Channel category icons:** Cropped and recolored from the locally supplied “Body Part Icons” PNG sheet. A matching sheet is available at [The Spriters Resource: Body Part Icons](https://www.spriters-resource.com/wii/miichannel/asset/64626/), listed as uploaded by **Mr. C**. Original game artwork: Nintendo.
 - **Mii wordmark:** Extracted from the locally supplied “Channel Icon” PNG sheet. A matching sheet is available at [The Spriters Resource: Channel Icon](https://www.spriters-resource.com/wii/miichannel/asset/607367/), listed as uploaded by **ElastedAlorian**. Original game artwork: Nintendo.
 - **Wii U Mii Maker eye sprites:** An eye outline and catchlight are used in the approximate fallback preview. The supplied sheet is labeled “Ripped by xAct.” See the [Wii U Menu collection on The Spriters Resource](https://www.spriters-resource.com/wii_u/systembios/). The precise sheet URL for the supplied file has not been verified. Original game artwork: Nintendo.
