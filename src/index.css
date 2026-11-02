@@ -346,6 +346,28 @@ select:focus-visible {
   gap: 12px;
 }
 
+.choice-grid.dense {
+  grid-template-columns: repeat(auto-fill, minmax(76px, 1fr));
+  gap: 8px;
+}
+
+.choice-grid.dense .feature-choice {
+  min-height: 78px;
+  border-radius: 14px;
+}
+
+.subsection-label {
+  margin: 18px 0 10px;
+  color: #2d4245;
+  font-size: 15px;
+}
+
+.thumb-pending {
+  color: #6a7e81;
+  font-size: 12px;
+  font-weight: 800;
+}
+
 .feature-choice {
   position: relative;
   min-height: 104px;
@@ -1291,4 +1313,252 @@ kbd.wide {
   .keyboard-row { margin-bottom: 3px; }
   .adjust-row { margin-bottom: 10px; }
   .bottom-bar button { height: 40px; }
+}
+
+/* Wii-inspired finish: bright surfaces, soft chrome and cyan selection rings. */
+body {
+  background: linear-gradient(180deg, #fdfefe 0%, #edf2f3 100%);
+}
+.topbar {
+  background: linear-gradient(180deg, #fff 0%, #f5f8f9 100%);
+  border-bottom-color: #c9d4d6;
+}
+.brand-mark {
+  background: linear-gradient(180deg, #fefefe 0%, #dbe7e9 100%);
+  border: 2px solid #9eb4b8;
+  color: #00a9c5;
+  box-shadow: inset 0 2px 2px white, 0 3px 8px #b6c6c988;
+}
+.category.active {
+  background: linear-gradient(180deg, #fff 0%, #e5f8fb 100%);
+  border: 2px solid #00b9d6;
+  color: #008ca7;
+  box-shadow: 0 0 0 3px #bfeff6, inset 0 1px white;
+}
+.category.active svg { color: #00a3bd; }
+.category.active::after { background: #00b9d6; }
+.preview-panel, .customize-panel, .adjust-panel {
+  border-color: #b7c7c9;
+  box-shadow: inset 0 2px white, 0 3px 0 #d5dfe0, 0 8px 20px #80979a1c;
+}
+.preview-panel {
+  background: radial-gradient(ellipse at 50% 42%, #fff 0%, #f4fafb 42%, #dcebed 100%);
+}
+.preview-panel::before { opacity: .08; }
+.preview-halo {
+  background: linear-gradient(160deg, #fff, #e8f5f7);
+  box-shadow: 0 0 0 12px #ffffff66, 0 0 0 13px #cce3e6;
+}
+.feature-choice {
+  background: linear-gradient(180deg, #fff 0%, #f4f8f8 55%, #e6eff0 100%);
+  box-shadow: inset 0 2px white, 0 3px 0 #d8e2e3;
+}
+.feature-choice.selected {
+  background: linear-gradient(180deg, #fff, #e4faff);
+  box-shadow: 0 0 0 3px #c0f2f8, inset 0 2px white;
+}
+.bottom-bar { background: linear-gradient(180deg, #f9fcfc, #e5edef); }
+
+@media (max-width: 1100px) {
+  body { min-width: 0; overflow: auto; }
+  .app-shell { height: auto; min-height: 100vh; grid-template-rows: auto 1fr auto; }
+  .topbar { grid-template-columns: 1fr; gap: 8px; }
+  .category-nav { display: flex; height: auto; overflow-x: auto; padding: 4px 2px 10px; }
+  .category { flex: 0 0 76px; min-height: 70px; }
+  .workspace { grid-template-columns: minmax(230px, 35%) minmax(0, 1fr); }
+  .preview-panel { min-height: 450px; }
+  .adjust-panel { grid-column: 1 / -1; overflow: visible; }
+  .bottom-bar { flex-wrap: wrap; gap: 10px; }
+}
+@media (max-width: 650px) {
+  .workspace { display: flex; flex-direction: column; padding: 12px; }
+  .preview-panel {
+    position: relative;
+    top: auto;
+    height: 420px;
+    min-height: 380px;
+  }
+  .customize-panel, .adjust-panel { overflow: visible; }
+  .choice-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .controller-guide { display: none; }
+}
+
+.brand-mark {
+  background: #fff url('/assets/wm4k/mii-channel-face.png') center 45% / 88% auto no-repeat;
+  color: transparent;
+  overflow: hidden;
+}
+
+.mii-webgl {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+}
+
+.preview-canvas-wrap {
+  position: absolute;
+  inset: 0;
+  touch-action: none;
+  cursor: grab;
+  user-select: none;
+}
+
+.preview-canvas-wrap:active {
+  cursor: grabbing;
+}
+
+.mii-gl {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.preview-orbit {
+  position: absolute;
+  z-index: 2;
+  left: 50%;
+  bottom: 10px;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 4px 4px 4px 12px;
+  border: 1px solid #c8d6d7;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: 0 8px 18px rgba(70, 99, 103, 0.14), inset 0 1px white;
+}
+
+.preview-orbit span {
+  color: #24555c;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.preview-orbit button {
+  border: 1px solid #b7c9cb;
+  border-radius: 999px;
+  background: linear-gradient(180deg, #fff, #e7f4f6);
+  color: #1d3d42;
+  font-size: 12px;
+  font-weight: 800;
+  padding: 6px 12px;
+  cursor: pointer;
+}
+
+.preview-orbit button:hover {
+  border-color: #00b9d6;
+  color: #007f98;
+}
+
+body {
+  background: linear-gradient(180deg, #f3f3f3 0%, #e4e4e4 100%);
+  color: #3a3a3a;
+}
+.topbar,
+.bottom-bar {
+  background: linear-gradient(180deg, #f7f7f7, #e8e8e8);
+  border-color: #c8c8c8;
+}
+.preview-panel,
+.customize-panel,
+.adjust-panel {
+  background: #f4f4f4;
+  border-color: #c5c5c5;
+}
+.preview-panel {
+  background: radial-gradient(ellipse at 50% 40%, #fff 0%, #efefef 70%);
+}
+.category.active {
+  background: #fff;
+  border: 2px solid #00c7e6;
+  box-shadow: 0 0 0 3px #b7f3fb;
+  color: #222;
+}
+
+.wii-icon {
+  display: block;
+  object-fit: contain;
+  background: #3c3f42;
+  border-radius: 7px;
+  padding: 2px;
+  box-sizing: border-box;
+}
+
+.brand-wordmark {
+  height: 40px;
+  width: auto;
+  background: #3a3d40;
+  border-radius: 8px;
+  padding: 6px 10px;
+}
+
+.mini-feature img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+  background: #f7f7f7;
+  border-radius: 10px;
+}
+
+.choice-grid.dense .mini-feature {
+  width: 64px;
+  height: 64px;
+}
+
+.mini-feature:has(img) i {
+  display: none;
+}
+
+@media (max-width: 1280px) {
+  body {
+    min-width: 0;
+    overflow: auto;
+  }
+  .app-shell {
+    height: auto;
+    min-height: 100vh;
+  }
+  .topbar {
+    grid-template-columns: minmax(160px, 200px) minmax(0, 1fr);
+  }
+  .category-nav {
+    display: flex;
+    height: auto;
+    overflow-x: auto;
+  }
+  .category {
+    flex: 0 0 78px;
+    min-height: 72px;
+  }
+  .workspace {
+    grid-template-columns: minmax(210px, 32%) minmax(0, 1fr) minmax(180px, 24%);
+  }
+  .preview-panel {
+    position: sticky;
+    top: 8px;
+    height: min(68vh, 620px);
+    align-self: start;
+  }
+}
+
+.preview-fallback {
+  position: absolute;
+  z-index: 2;
+  left: 50%;
+  bottom: 8px;
+  transform: translateX(-50%);
+  margin: 0;
+  padding: 6px 10px;
+  border: 1px solid #c8d6d7;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.92);
+  color: #24555c;
+  font-size: 12px;
+  font-weight: 800;
+  white-space: nowrap;
 }

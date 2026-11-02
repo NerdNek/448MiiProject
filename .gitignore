@@ -1,4 +1,6 @@
 node_modules/
+# Nintendo Mii resource required by FFL.js. Local only. Do not commit.
+public/ffl/
 dist/
 build/
 .cache/

@@ -69,6 +69,10 @@ npm run dev
 
 Replace `YOUR_USERNAME` with the repository owner's GitHub username, or copy the exact clone URL from the repository's **Code** menu.
 
+## Mii preview resource
+
+The 3D FFL preview and feature thumbnails need `AFLResHigh_2_3.dat` at `public/ffl/asset/model/character/mii/AFLResHigh_2_3.dat`. This local resource is not included in the repository. Without it, the app uses an approximate fallback preview and FFL thumbnails are unavailable. See [credits and resource details](CREDITS.md).
+
 ## How to use the prototype
 
 1. Open the website using the local URL.
@@ -131,4 +135,4 @@ Make sure you are in the folder containing `package.json` and use a supported No
 
 ## Credits
 
-Created by the project team for an educational UI/UX redesign assignment. Original Wii and Mii concepts belong to Nintendo. This project is an unofficial educational prototype.
+Created by the project team for an educational UI/UX redesign assignment. Original Wii and Mii concepts belong to Nintendo. This project is an unofficial educational prototype. See [asset and technology credits](CREDITS.md) for linked sources, contributors, and licenses.

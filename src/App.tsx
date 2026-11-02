@@ -1,4 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { FeatureThumb } from "./ffl-thumb"
+import { fflCounts, getFflSession } from "./ffl/runtime"
+import type { ThumbPart } from "./ffl/runtime"
+import { eyePalette, facePalette, hairPalette, mouthPalette, type PaletteColor } from "./ffl/palette"
+import { FflPreview } from "./ffl-preview"
+import { maskedSprite } from "./masked-sprite"
+import { MiiWebGLPreview, canUseWebGL } from "./mii-preview-3d"
 
 type CategoryId = "face" | "hair" | "eyebrows" | "eyes" | "nose" | "mouth" | "glasses" | "facialHair" | "accessories" | "profile"
 
@@ -8,6 +15,10 @@ type MiiState = {
   hairStyle: number
   hairHue: number
   eyebrowStyle: number
+  eyebrowY: number
+  eyebrowX: number
+  eyebrowSize: number
+  eyebrowRotation: number
   eyeStyle: number
   eyeHue: number
   eyeY: number
@@ -16,16 +27,14 @@ type MiiState = {
   eyeRotation: number
   noseStyle: number
   noseY: number
-  noseX: number
   noseSize: number
-  noseRotation: number
   mouthStyle: number
   mouthY: number
-  mouthX: number
   mouthSize: number
-  mouthRotation: number
+  mouthColor: number
   glasses: number
   facialHair: number
+  beardStyle: number
   accessory: number
   name: string
   month: number
@@ -39,30 +48,29 @@ type History = {
   future: MiiState[]
 }
 
+const eyebrowDefaults = { eyebrowY: 12, eyebrowX: 4, eyebrowSize: 4, eyebrowRotation: 4 }
+const eyeDefaults = { eyeY: 12, eyeX: 4, eyeSize: 4, eyeRotation: 4 }
+
 const initialMii: MiiState = {
   faceShape: 0,
-  skinTone: "#F2C8A8",
-  hairStyle: 0,
-  hairHue: 26,
-  eyebrowStyle: 0,
+  skinTone: facePalette[1].hex,
+  hairStyle: 33,
+  hairHue: 1,
+  eyebrowStyle: 6,
+  ...eyebrowDefaults,
   eyeStyle: 0,
-  eyeHue: 202,
-  eyeY: 0,
-  eyeX: 0,
-  eyeSize: 1,
-  eyeRotation: 0,
+  eyeHue: 4,
+  ...eyeDefaults,
   noseStyle: 0,
-  noseY: 0,
-  noseX: 0,
-  noseSize: 1,
-  noseRotation: 0,
-  mouthStyle: 0,
-  mouthY: 0,
-  mouthX: 0,
-  mouthSize: 1,
-  mouthRotation: 0,
+  noseY: 9,
+  noseSize: 4,
+  mouthStyle: 22,
+  mouthY: 13,
+  mouthSize: 4,
+  mouthColor: 0,
   glasses: 0,
   facialHair: 0,
+  beardStyle: 0,
   accessory: 0,
   name: "My Mii",
   month: 6,
@@ -79,20 +87,11 @@ const categories: { id: CategoryId; label: string; hint: string }[] = [
   { id: "mouth", label: "Mouth", hint: "Choose a smile and lip shape" },
   { id: "glasses", label: "Glasses", hint: "Add optional eyewear" },
   { id: "facialHair", label: "Facial hair", hint: "Add a beard or moustache" },
-  { id: "accessories", label: "Extras", hint: "Add playful accessories" },
+  { id: "accessories", label: "Extras", hint: "Add a beauty mark" },
   { id: "profile", label: "Profile", hint: "Name, birthday, and identity" },
 ]
 
-const skinTones = [
-  "#F8DDC7",
-  "#F2C8A8",
-  "#DFA77F",
-  "#BC7955",
-  "#8A523A",
-  "#563526",
-]
-const hairPresets = [20, 34, 47, 12, 0, 222]
-const eyePresets = [202, 156, 87, 48, 28, 0]
+const skinTones = facePalette.map((entry) => entry.hex)
 const monthNames = [
   "January",
   "February",
@@ -107,22 +106,43 @@ const monthNames = [
   "November",
   "December",
 ]
-const hairStyleNames = [
-  "Classic side part",
-  "Playful spikes",
-  "Rounded crop",
-  "Swept fringe",
-  "High twin tails",
-  "Voluminous curly hair",
-  "Space buns",
-]
-
 function getDaysInMonth(month: number) {
   if (month === 2) return 29
   return [4, 6, 9, 11].includes(month) ? 30 : 31
 }
 
+const wiiIcon: Record<string, string> = {
+  face: "/assets/wii/parts/p052.png",
+  hair: "/assets/wii/parts/p072.png",
+  eyebrows: "/assets/wii/parts/p146.png",
+  eyes: "/assets/wii/parts/p178.png",
+  nose: "/assets/wii/parts/p229.png",
+  mouth: "/assets/wii/parts/p256.png",
+  glasses: "/assets/wii/parts/p272.png",
+  facialHair: "/assets/wii/parts/p245.png",
+  accessories: "/assets/wii/parts/p290.png",
+  profile: "/assets/wii/parts/p021.png",
+}
+
+function MaskedIcon({ src, size }: { src: string; size: number }) {
+  const [url, setUrl] = useState<string | null>(null)
+  useEffect(() => {
+    let cancel = false
+    void maskedSprite(src).then((next) => {
+      if (!cancel) setUrl(next)
+    })
+    return () => {
+      cancel = true
+    }
+  }, [src])
+  if (!url) return <span className="wii-icon" style={{ width: size, height: size }} />
+  return (
+    <img className="wii-icon" src={url} alt="" width={size} height={size} draggable={false} />
+  )
+}
+
 function Icon({ name, size = 22 }: { name: string; size?: number }) {
+  if (wiiIcon[name]) return <MaskedIcon src={wiiIcon[name]} size={size} />
   const common = {
     fill: "none",
     stroke: "currentColor",
@@ -226,8 +246,29 @@ function Icon({ name, size = 22 }: { name: string; size?: number }) {
 }
 
 function MiiPreview({ mii }: { mii: MiiState }) {
-  const eyeColor = `hsl(${mii.eyeHue} 58% 35%)`
-  const hairColor = `hsl(${mii.hairHue} 55% 22%)`
+  const hair = hairPalette[mii.hairHue] ?? hairPalette[0]
+  const eye = eyePalette[mii.eyeHue] ?? eyePalette[0]
+  const drawn = {
+    ...mii,
+    faceShape: mii.faceShape % 3,
+    hairStyle: mii.hairStyle % 7,
+    hairHue: hair.hue,
+    eyebrowStyle: mii.eyebrowStyle % 2,
+    eyeStyle: mii.eyeStyle % 3,
+    eyeHue: eye.hue,
+    eyeY: Math.round((9 - mii.eyeY) * 0.8),
+    eyeX: Math.round((mii.eyeX - 6) * 0.7),
+    eyeSize: 0.8 + (mii.eyeSize / 7) * 0.5,
+    eyeRotation: (mii.eyeRotation - 4) * 3,
+    noseStyle: mii.noseStyle % 3,
+    mouthStyle: mii.mouthStyle % 3,
+    glasses: Math.min(mii.glasses, 2),
+    facialHair: Math.min(mii.facialHair, 2),
+    accessory: Math.min(mii.accessory, 1),
+  }
+  mii = drawn
+  const eyeColor = eye.hex
+  const hairColor = hair.hex
   const eyeGap = 32 + mii.eyeX * 2.2
   const eyeY = 164 + mii.eyeY * 2
   const facePath =
@@ -424,7 +465,7 @@ function MiiPreview({ mii }: { mii: MiiState }) {
         </g>
 
         <g
-          transform={`translate(${140 + mii.noseX * 2} ${200 + mii.noseY * 2}) rotate(${mii.noseRotation}) scale(${mii.noseSize}) translate(-140 -200)`}
+          transform={`translate(140 ${200 + (mii.noseY - 9) * 2}) scale(${0.6 + mii.noseSize * 0.1}) translate(-140 -200)`}
         >
           {mii.noseStyle === 0 && (
             <path
@@ -456,7 +497,7 @@ function MiiPreview({ mii }: { mii: MiiState }) {
         </g>
 
         <g
-          transform={`translate(${140 + mii.mouthX * 2} ${232 + mii.mouthY * 2}) rotate(${mii.mouthRotation}) scale(${mii.mouthSize}) translate(-140 -232)`}
+          transform={`translate(140 ${232 + (mii.mouthY - 13) * 2}) scale(${0.6 + mii.mouthSize * 0.1}) translate(-140 -232)`}
         >
           {mii.mouthStyle === 0 && (
             <path
@@ -540,51 +581,65 @@ function MiiPreview({ mii }: { mii: MiiState }) {
   )
 }
 
+function LiveMii({ mii }: { mii: MiiState }) {
+  const [mode, setMode] = useState<"ffl" | "procedural" | "flat">(() =>
+    canUseWebGL() ? "ffl" : "flat",
+  )
+  const [reason, setReason] = useState("")
+  const useProcedural = useCallback((message: string) => {
+    setReason(message)
+    setMode("procedural")
+  }, [])
+  const useFlat = useCallback(() => setMode("flat"), [])
+  if (mode === "flat") {
+    return (
+      <>
+        <MiiPreview mii={mii} />
+        <p className="preview-fallback">
+          Drawing preview. This browser can't show the 3D view.
+        </p>
+      </>
+    )
+  }
+  if (mode === "procedural") {
+    return (
+      <>
+        <MiiWebGLPreview mii={mii} onUnavailable={useFlat} />
+        <p className="preview-fallback">
+          Approximate preview. {reason || "The FFL renderer is unavailable."}
+        </p>
+      </>
+    )
+  }
+  return <FflPreview mii={mii} onUnavailable={useProcedural} />
+}
+
 function ChoiceGrid({
   count,
   selected,
   onSelect,
   type,
+  part,
 }: {
   count: number
   selected: number
   onSelect: (value: number) => void
   type: string
+  part: ThumbPart
 }) {
   return (
-    <div className="choice-grid">
+    <div className={count > 9 ? "choice-grid dense" : "choice-grid"}>
       {Array.from({ length: count }).map((_, index) => (
         <button
           className={`feature-choice ${selected === index ? "selected" : ""}`}
           key={index}
           onClick={() => onSelect(index)}
           data-focusable
-          aria-label={
-            type === "hair" ? hairStyleNames[index] : `${type} option ${index + 1}`
-          }
-          title={type === "hair" ? hairStyleNames[index] : undefined}
+          aria-label={`${type} ${index + 1}`}
           aria-pressed={selected === index}
         >
-          <span className={`mini-feature ${type} variant-${index}`}>
-            {type === "eyes" && (
-              <>
-                <i />
-                <i />
-              </>
-            )}
-            {type === "nose" && <i />}
-            {type === "mouth" && <i />}
-            {type === "glasses" && index > 0 && <i />}
-            {type === "hair" && <i />}
-            {type === "face" && <i />}
-            {type === "brows" && (
-              <>
-                <i />
-                <i />
-              </>
-            )}
-            {type === "beard" && index > 0 && <i />}
-            {type === "extras" && index > 0 && <i />}
+          <span className={`mini-feature ${type}`}>
+            <FeatureThumb part={part} index={index} />
           </span>
           {selected === index && (
             <span className="choice-check">
@@ -600,19 +655,22 @@ function ChoiceGrid({
 function ColorControl({
   value,
   onChange,
-  presets,
+  palette,
   label,
 }: {
   value: number
   onChange: (value: number) => void
-  presets: number[]
+  palette: PaletteColor[]
   label: string
 }) {
+  const selected = palette[value] ?? palette[0]
   return (
     <div className="color-control">
       <div className="control-label-row">
         <label htmlFor={`${label}-hue`}>{label}</label>
-        <output>{value}°</output>
+        <output>
+          {selected.name} · {selected.hue}°
+        </output>
       </div>
       <div className="hue-wrap">
         <input
@@ -620,34 +678,38 @@ function ColorControl({
           className="hue-slider"
           type="range"
           min="0"
-          max="359"
-          value={value}
+          max={palette.length - 1}
+          step="1"
+          value={Math.min(value, palette.length - 1)}
           onChange={(e) => onChange(Number(e.target.value))}
           data-focusable
           aria-label={`${label} hue`}
+          style={{
+            background: `linear-gradient(90deg, ${palette.map((entry) => entry.hex).join(", ")})`,
+          }}
         />
         <span
           className="hue-thumb-preview"
           style={{
-            background: `hsl(${value} 60% 40%)`,
-            left: `${(value / 359) * 100}%`,
+            background: selected.hex,
+            left: `${(Math.min(value, palette.length - 1) / Math.max(1, palette.length - 1)) * 100}%`,
           }}
         />
       </div>
       <div className="swatch-row" aria-label={`${label} presets`}>
-        {presets.map((hue) => (
+        {palette.map((entry, index) => (
           <button
-            key={hue}
-            className={Math.abs(hue - value) < 4 ? "swatch active" : "swatch"}
-            style={{ background: `hsl(${hue} 58% ${hue === 0 ? 18 : 30}%)` }}
-            onClick={() => onChange(hue)}
+            key={entry.hex}
+            className={index === value ? "swatch active" : "swatch"}
+            style={{ background: entry.hex }}
+            onClick={() => onChange(index)}
             data-focusable
-            aria-label={`Set ${label} hue to ${hue} degrees`}
+            aria-label={`Set ${label} to ${entry.name}, hue ${entry.hue} degrees`}
           />
         ))}
       </div>
       <p className="microcopy">
-        Use the pointer, or focus the slider and press ← → for precise changes.
+        {label} uses the {palette.length} colors this renderer supports. Each step changes the preview.
       </p>
     </div>
   )
@@ -721,6 +783,12 @@ export default function App() {
     present: initialMii,
     future: [],
   })
+  const [fflRanges, setFflRanges] = useState<Awaited<ReturnType<typeof getFflSession>> | null>(null)
+  useEffect(() => {
+    let active = true
+    void getFflSession().then((session) => { if (active) setFflRanges(session) }).catch(() => {})
+    return () => { active = false }
+  }, [])
   const [toast, setToast] = useState("")
   const toastTimer = useRef<number | undefined>(undefined)
   const mii = history.present
@@ -865,10 +933,11 @@ export default function App() {
               subtitle="Start with a shape that feels like you."
             />
             <ChoiceGrid
-              count={3}
+              count={fflCounts.faceType}
               selected={mii.faceShape}
               onSelect={(faceShape) => updateMii({ faceShape })}
               type="face"
+              part="face"
             />
             <div className="subsection">
               <h3>Skin tone</h3>
@@ -901,16 +970,17 @@ export default function App() {
               subtitle="Every style is available to every Mii."
             />
             <ChoiceGrid
-              count={7}
+              count={fflCounts.hairType}
               selected={mii.hairStyle}
               onSelect={(hairStyle) => updateMii({ hairStyle })}
               type="hair"
+              part="hair"
             />
             <div className="subsection">
               <ColorControl
                 value={mii.hairHue}
                 onChange={(hairHue) => updateMii({ hairHue })}
-                presets={hairPresets}
+                palette={hairPalette}
                 label="Hair color"
               />
             </div>
@@ -924,14 +994,14 @@ export default function App() {
               subtitle="Add expression with a shape that suits your Mii."
             />
             <ChoiceGrid
-              count={2}
+              count={fflCounts.eyebrowType}
               selected={mii.eyebrowStyle}
               onSelect={(eyebrowStyle) => updateMii({ eyebrowStyle })}
               type="brows"
+              part="brows"
             />
             <Tip>
-              Eyebrows move with the eye position controls for natural
-              alignment.
+              Adjust eyebrow position independently in the fine-tune panel. Their color matches the hair color.
             </Tip>
           </>
         )
@@ -943,16 +1013,17 @@ export default function App() {
               subtitle="Select a shape, then fine-tune it on the right."
             />
             <ChoiceGrid
-              count={3}
+              count={fflCounts.eyeType}
               selected={mii.eyeStyle}
               onSelect={(eyeStyle) => updateMii({ eyeStyle })}
               type="eyes"
+              part="eyes"
             />
             <div className="subsection">
               <ColorControl
                 value={mii.eyeHue}
                 onChange={(eyeHue) => updateMii({ eyeHue })}
-                presets={eyePresets}
+                palette={eyePalette}
                 label="Eye color"
               />
             </div>
@@ -966,10 +1037,11 @@ export default function App() {
               subtitle="Simple, expressive shapes in classic Mii style."
             />
             <ChoiceGrid
-              count={3}
+              count={fflCounts.noseType}
               selected={mii.noseStyle}
               onSelect={(noseStyle) => updateMii({ noseStyle })}
               type="nose"
+              part="nose"
             />
           </>
         )
@@ -981,11 +1053,20 @@ export default function App() {
               subtitle="Give your Mii a little personality."
             />
             <ChoiceGrid
-              count={3}
+              count={fflCounts.mouthType}
               selected={mii.mouthStyle}
               onSelect={(mouthStyle) => updateMii({ mouthStyle })}
               type="mouth"
+              part="mouth"
             />
+            <div className="subsection">
+              <ColorControl
+                value={mii.mouthColor}
+                onChange={(mouthColor) => updateMii({ mouthColor })}
+                palette={mouthPalette}
+                label="Mouth color"
+              />
+            </div>
           </>
         )
       case "glasses":
@@ -996,10 +1077,11 @@ export default function App() {
               subtitle="Optional eyewear for any look."
             />
             <ChoiceGrid
-              count={3}
+              count={fflCounts.glass}
               selected={mii.glasses}
               onSelect={(glasses) => updateMii({ glasses })}
               type="glasses"
+              part="glasses"
             />
           </>
         )
@@ -1010,26 +1092,38 @@ export default function App() {
               title="Choose facial hair"
               subtitle="Mix and match freely—there are no restrictions."
             />
+            <h3 className="subsection-label">Moustache</h3>
             <ChoiceGrid
-              count={3}
+              count={fflCounts.mustache}
               selected={mii.facialHair}
               onSelect={(facialHair) => updateMii({ facialHair })}
-              type="beard"
+              type="moustache"
+              part="mustache"
             />
+            <h3 className="subsection-label">Beard</h3>
+            <ChoiceGrid
+              count={fflCounts.beard}
+              selected={mii.beardStyle}
+              onSelect={(beardStyle) => updateMii({ beardStyle })}
+              type="beard"
+              part="beard"
+            />
+            <Tip>The first option in each row is none. Facial hair uses the hair color.</Tip>
           </>
         )
       case "accessories":
         return (
           <>
             <SectionHeader
-              title="Add something extra"
-              subtitle="A small finishing touch for your Mii."
+              title="Add a beauty mark"
+              subtitle="The resource includes a mole. Other extras are not in this renderer."
             />
             <ChoiceGrid
-              count={3}
-              selected={mii.accessory}
+              count={fflCounts.mole}
+              selected={mii.accessory > 0 ? 1 : 0}
               onSelect={(accessory) => updateMii({ accessory })}
-              type="extras"
+              type="mole"
+              part="mole"
             />
           </>
         )
@@ -1099,9 +1193,11 @@ export default function App() {
     <main className="app-shell">
       <header className="topbar">
         <div className="brand">
-          <div className="brand-mark" aria-hidden="true">
-            mii
-          </div>
+          <img
+            className="brand-wordmark"
+            src="/assets/wii/ui/wordmark.png"
+            alt=""
+          />
           <div>
             <h1>Mii Creator</h1>
             <p>Create someone wonderfully you</p>
@@ -1133,11 +1229,11 @@ export default function App() {
           </div>
           <div className="preview-stage">
             <div className="preview-halo" />
-            <MiiPreview mii={mii} />
+            <LiveMii mii={mii} />
           </div>
           <div className="mii-nameplate">
             <strong>{mii.name || "Unnamed Mii"}</strong>
-            <span>Changes appear instantly</span>
+            <span>FFL preview · Wii U shader port</span>
           </div>
         </aside>
 
@@ -1153,7 +1249,19 @@ export default function App() {
         </section>
 
         <aside className="adjust-panel" aria-label="Contextual adjustments">
-          {category === "eyes" ? (
+          {category === "eyebrows" ? (
+            <>
+              <div className="adjust-title"><div><span className="eyebrow">Fine tune</span><h2>Eyebrow adjustments</h2></div><span className="context-icon"><Icon name="eyebrows" /></span></div>
+              <p className="adjust-intro">Adjust eyebrows independently from the eyes.</p>
+              {fflRanges ? <>
+                <AdjustRow label="Vertical position" value={mii.eyebrowY} {...fflRanges.brows.y} step={1} leftIcon="down" rightIcon="up" onChange={(eyebrowY) => updateMii({ eyebrowY })} />
+                <AdjustRow label="Spacing" value={mii.eyebrowX} {...fflRanges.brows.x} step={1} leftIcon="left" rightIcon="right" onChange={(eyebrowX) => updateMii({ eyebrowX })} />
+                <AdjustRow label="Size" value={mii.eyebrowSize} {...fflRanges.brows.scale} step={1} leftIcon="minus" rightIcon="plus" onChange={(eyebrowSize) => updateMii({ eyebrowSize })} />
+                <AdjustRow label="Rotation" value={mii.eyebrowRotation} {...fflRanges.brows.rotate} step={1} leftIcon="rotateLeft" rightIcon="rotateRight" onChange={(eyebrowRotation) => updateMii({ eyebrowRotation })} />
+                <button className="reset-button" onClick={() => updateMii(eyebrowDefaults, "Eyebrow adjustments reset")} data-focusable>Reset eyebrow adjustments</button>
+              </> : <p className="adjust-intro">Eyebrow adjustments require the FFL preview.</p>}
+            </>
+          ) : category === "eyes" ? (
             <>
               <div className="adjust-title">
                 <div>
@@ -1165,23 +1273,23 @@ export default function App() {
                 </span>
               </div>
               <p className="adjust-intro">
-                Use buttons for quick steps or select anywhere on a slider.
+                These steps adjust the eyes independently from the eyebrows.
               </p>
               <AdjustRow
                 label="Vertical position"
                 value={mii.eyeY}
-                min={-8}
-                max={8}
+                min={0}
+                max={fflCounts.eyeY - 1}
                 step={1}
-                leftIcon="up"
-                rightIcon="down"
+                leftIcon="down"
+                rightIcon="up"
                 onChange={(eyeY) => updateMii({ eyeY })}
               />
               <AdjustRow
                 label="Spacing"
                 value={mii.eyeX}
-                min={-6}
-                max={8}
+                min={0}
+                max={fflCounts.eyeX - 1}
                 step={1}
                 leftIcon="left"
                 rightIcon="right"
@@ -1189,20 +1297,20 @@ export default function App() {
               />
               <AdjustRow
                 label="Size"
-                value={Math.round((mii.eyeSize - 1) * 10)}
-                min={-3}
-                max={5}
+                value={mii.eyeSize}
+                min={0}
+                max={fflCounts.eyeScale - 1}
                 step={1}
                 leftIcon="minus"
                 rightIcon="plus"
-                onChange={(value) => updateMii({ eyeSize: 1 + value / 10 })}
+                onChange={(eyeSize) => updateMii({ eyeSize })}
               />
               <AdjustRow
                 label="Rotation"
                 value={mii.eyeRotation}
-                min={-15}
-                max={15}
-                step={3}
+                min={0}
+                max={fflCounts.eyeRotate - 1}
+                step={1}
                 leftIcon="rotateLeft"
                 rightIcon="rotateRight"
                 onChange={(eyeRotation) => updateMii({ eyeRotation })}
@@ -1210,10 +1318,7 @@ export default function App() {
               <button
                 className="reset-button"
                 onClick={() =>
-                  updateMii(
-                    { eyeY: 0, eyeX: 0, eyeSize: 1, eyeRotation: 0 },
-                    "Eye adjustments reset",
-                  )
+                  updateMii(eyeDefaults, "Eye adjustments reset")
                 }
                 data-focusable
               >
@@ -1222,137 +1327,23 @@ export default function App() {
             </>
           ) : category === "nose" ? (
             <>
-              <div className="adjust-title">
-                <div>
-                  <span className="eyebrow">Fine tune</span>
-                  <h2>Nose adjustments</h2>
-                </div>
-                <span className="context-icon">
-                  <Icon name="nose" />
-                </span>
-              </div>
-              <p className="adjust-intro">
-                Use buttons for quick steps or select anywhere on a slider.
-              </p>
-              <AdjustRow
-                label="Vertical position"
-                value={mii.noseY}
-                min={-8}
-                max={8}
-                step={1}
-                leftIcon="up"
-                rightIcon="down"
-                onChange={(noseY) => updateMii({ noseY })}
-              />
-              <AdjustRow
-                label="Horizontal position"
-                value={mii.noseX}
-                min={-8}
-                max={8}
-                step={1}
-                leftIcon="left"
-                rightIcon="right"
-                onChange={(noseX) => updateMii({ noseX })}
-              />
-              <AdjustRow
-                label="Size"
-                value={Math.round((mii.noseSize - 1) * 10)}
-                min={-3}
-                max={5}
-                step={1}
-                leftIcon="minus"
-                rightIcon="plus"
-                onChange={(value) => updateMii({ noseSize: 1 + value / 10 })}
-              />
-              <AdjustRow
-                label="Rotation"
-                value={mii.noseRotation}
-                min={-15}
-                max={15}
-                step={3}
-                leftIcon="rotateLeft"
-                rightIcon="rotateRight"
-                onChange={(noseRotation) => updateMii({ noseRotation })}
-              />
-              <button
-                className="reset-button"
-                onClick={() =>
-                  updateMii(
-                    { noseY: 0, noseX: 0, noseSize: 1, noseRotation: 0 },
-                    "Nose adjustments reset",
-                  )
-                }
-                data-focusable
-              >
-                Reset nose adjustments
-              </button>
+              <div className="adjust-title"><div><span className="eyebrow">Fine tune</span><h2>Nose adjustments</h2></div><span className="context-icon"><Icon name="nose" /></span></div>
+              <p className="adjust-intro">Adjust vertical position and size independently.</p>
+              {fflRanges ? <>
+                <AdjustRow label="Vertical position" value={mii.noseY} {...fflRanges.nose.y} step={1} leftIcon="up" rightIcon="down" onChange={(noseY) => updateMii({ noseY })} />
+                <AdjustRow label="Size" value={mii.noseSize} {...fflRanges.nose.scale} step={1} leftIcon="minus" rightIcon="plus" onChange={(noseSize) => updateMii({ noseSize })} />
+                <button className="reset-button" onClick={() => updateMii({ noseY: 9, noseSize: 4 }, "Nose adjustments reset")} data-focusable>Reset nose adjustments</button>
+              </> : <p className="adjust-intro">Adjustments require the FFL preview.</p>}
             </>
           ) : category === "mouth" ? (
             <>
-              <div className="adjust-title">
-                <div>
-                  <span className="eyebrow">Fine tune</span>
-                  <h2>Mouth adjustments</h2>
-                </div>
-                <span className="context-icon">
-                  <Icon name="mouth" />
-                </span>
-              </div>
-              <p className="adjust-intro">
-                Use buttons for quick steps or select anywhere on a slider.
-              </p>
-              <AdjustRow
-                label="Vertical position"
-                value={mii.mouthY}
-                min={-8}
-                max={8}
-                step={1}
-                leftIcon="up"
-                rightIcon="down"
-                onChange={(mouthY) => updateMii({ mouthY })}
-              />
-              <AdjustRow
-                label="Horizontal position"
-                value={mii.mouthX}
-                min={-8}
-                max={8}
-                step={1}
-                leftIcon="left"
-                rightIcon="right"
-                onChange={(mouthX) => updateMii({ mouthX })}
-              />
-              <AdjustRow
-                label="Size"
-                value={Math.round((mii.mouthSize - 1) * 10)}
-                min={-3}
-                max={5}
-                step={1}
-                leftIcon="minus"
-                rightIcon="plus"
-                onChange={(value) => updateMii({ mouthSize: 1 + value / 10 })}
-              />
-              <AdjustRow
-                label="Rotation"
-                value={mii.mouthRotation}
-                min={-15}
-                max={15}
-                step={3}
-                leftIcon="rotateLeft"
-                rightIcon="rotateRight"
-                onChange={(mouthRotation) => updateMii({ mouthRotation })}
-              />
-              <button
-                className="reset-button"
-                onClick={() =>
-                  updateMii(
-                    { mouthY: 0, mouthX: 0, mouthSize: 1, mouthRotation: 0 },
-                    "Mouth adjustments reset",
-                  )
-                }
-                data-focusable
-              >
-                Reset mouth adjustments
-              </button>
+              <div className="adjust-title"><div><span className="eyebrow">Fine tune</span><h2>Mouth adjustments</h2></div><span className="context-icon"><Icon name="mouth" /></span></div>
+              <p className="adjust-intro">Adjust vertical position and size independently.</p>
+              {fflRanges ? <>
+                <AdjustRow label="Vertical position" value={mii.mouthY} {...fflRanges.mouth.y} step={1} leftIcon="up" rightIcon="down" onChange={(mouthY) => updateMii({ mouthY })} />
+                <AdjustRow label="Size" value={mii.mouthSize} {...fflRanges.mouth.scale} step={1} leftIcon="minus" rightIcon="plus" onChange={(mouthSize) => updateMii({ mouthSize })} />
+                <button className="reset-button" onClick={() => updateMii({ mouthY: 13, mouthSize: 4 }, "Mouth adjustments reset")} data-focusable>Reset mouth adjustments</button>
+              </> : <p className="adjust-intro">Adjustments require the FFL preview.</p>}
             </>
           ) : category === "profile" ? (
             <>
