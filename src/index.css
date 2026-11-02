@@ -78,7 +78,10 @@ select:focus-visible {
   display: flex;
   align-items: center;
   gap: 12px;
+  min-width: 0;
 }
+
+.brand > div { min-width: 0; }
 
 .brand-mark {
   width: 50px;
@@ -105,7 +108,7 @@ select:focus-visible {
   margin: 4px 0 0;
   color: var(--muted);
   font-size: 12px;
-  white-space: nowrap;
+  line-height: 1.25;
 }
 
 .category-nav {
@@ -320,6 +323,18 @@ select:focus-visible {
 
 .category-breadcrumb svg {
   color: var(--cyan-dark);
+}
+
+.category-step {
+  margin-left: auto;
+  padding: 5px 10px;
+  border: 1px solid #c7dcde;
+  border-radius: 999px;
+  background: linear-gradient(180deg, #fff, #eaf6f7);
+  color: #376b73;
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
 }
 
 .category-breadcrumb i {
@@ -1380,6 +1395,10 @@ kbd.wide {
   margin-top: 8px;
   padding-top: 0;
   border-top: 0;
+}
+
+.face-color + .choice-browser {
+  margin-top: 16px;
 }
 
 .group-choice:focus-visible,

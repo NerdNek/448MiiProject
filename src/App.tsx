@@ -1317,14 +1317,7 @@ export default function App() {
         return (
           <>
             <SectionHeader title="Face" subtitle="Shape and skin tone." />
-            <ChoiceGrid
-              count={fflCounts.faceType}
-              selected={mii.faceShape}
-              onSelect={(faceShape) => updateMii({ faceShape })}
-              type="face"
-              part="face"
-            />
-            <div className="subsection">
+            <div className="subsection choice-color face-color">
               <ColorControl
                 label="Skin color"
                 value={gradientPosition(skinGradient, mii.skinTone)}
@@ -1335,6 +1328,13 @@ export default function App() {
                 smooth
               />
             </div>
+            <ChoiceGrid
+              count={fflCounts.faceType}
+              selected={mii.faceShape}
+              onSelect={(faceShape) => updateMii({ faceShape })}
+              type="face"
+              part="face"
+            />
           </>
         )
       case "hair":
@@ -1602,6 +1602,9 @@ export default function App() {
           <div className="category-breadcrumb">
             <Icon name={category} size={18} />
             <span>{activeCategory.label}</span>
+            <span className="category-step" aria-label={`Category ${categories.findIndex((item) => item.id === category) + 1} of ${categories.length}: ${activeCategory.label}`}>
+              Step {categories.findIndex((item) => item.id === category) + 1} of {categories.length}
+            </span>
           </div>
           <div className="section-enter" key={category}>
             {renderCenter()}
