@@ -1,10 +1,13 @@
 import { useEffect, useRef } from "react"
 import * as THREE from "three"
 import { eyePalette, hairPalette } from "./ffl/palette"
+import { BODY_COLORS, FFL_FACE_WIDTH, buildWiiBody } from "./mii-body"
+import { playSfx } from "./sfx"
 
 /**
- * Original procedural bust in the proportions of a Wii Mii Channel preview:
- * a large shallow head, graphic features, a small shirt, and matte toon color.
+ * Original procedural fallback in the proportions of a Wii Mii Channel
+ * preview: a large shallow head, graphic features, the shared handmade body
+ * from mii-body.ts, and matte toon color.
  * Two isolated Wii U Mii Maker eye parts (a round outline and a catchlight)
  * are textured on the oval eye styles. They are Wii U parts, not original Wii
  * meshes. Almond eyes stay drawn so the three shape choices remain distinct.
@@ -15,9 +18,11 @@ export type MiiLook = {
   skinTone: string
   hairStyle: number
   hairHue: number
+  hairCustom?: string | null
   eyebrowStyle: number
   eyeStyle: number
   eyeHue: number
+  eyeCustom?: string | null
   eyeY: number
   eyeX: number
   eyeSize: number
@@ -353,7 +358,7 @@ function addEyes(group: THREE.Group, mii: MiiLook, face: Face, bin: Bin, assets:
   const { gap, y } = eyePlacement(mii)
   const white = ink(bin, cssColor("#fffcf8"))
   const outline = ink(bin, cssColor("#2b2b2b"))
-  const irisMat = ink(bin, hslColor(mii.eyeHue, 62, 32))
+  const irisMat = ink(bin, mii.eyeCustom ? cssColor(mii.eyeCustom) : hslColor(mii.eyeHue, 62, 32))
   const pupil = ink(bin, cssColor("#161616"))
   const shape = eyeOutline(mii.eyeStyle)
   const irisRadius = mii.eyeStyle === 1 ? 0.055 : 0.048
@@ -581,9 +586,9 @@ function buildCharacter(
 
   const skin = matte(bin, cssColor(mii.skinTone), gradient)
   const skinInk = ink(bin, cssColor(mii.skinTone).lerp(cssColor("#4e342c"), 0.62))
-  const hairMat = matte(bin, hslColor(mii.hairHue, 48, 24), gradient)
-  const hairInk = ink(bin, hslColor(mii.hairHue, 48, 22))
-  const shirt = matte(bin, cssColor("#2ec4e4"), gradient)
+  const hairMat = matte(bin, mii.hairCustom ? cssColor(mii.hairCustom) : hslColor(mii.hairHue, 48, 24), gradient)
+  const hairInk = ink(bin, mii.hairCustom ? cssColor(mii.hairCustom) : hslColor(mii.hairHue, 48, 22))
+  const shirt = matte(bin, cssColor(BODY_COLORS.shirt), gradient)
   const lip = ink(bin, cssColor("#c24d5a"))
   const cavity = ink(bin, cssColor("#7a3038"))
 
@@ -628,36 +633,15 @@ function buildCharacter(
   addAccessory(features, mii.accessory, face, bin)
   character.add(features)
 
-  const neck = trackMesh(new THREE.Mesh(new THREE.CylinderGeometry(0.14, 0.18, 0.16, 20), skin), bin)
-  neck.position.y = -0.9
-  const torso = trackMesh(new THREE.Mesh(new THREE.SphereGeometry(0.4, 28, 20), shirt), bin)
-  torso.scale.set(1.35, 0.78, 0.78)
-  torso.position.y = -1.08
-  ;[-1, 1].forEach((side) => {
-    const arm = trackMesh(new THREE.Mesh(new THREE.CapsuleGeometry(0.09, 0.28, 4, 10), shirt), bin)
-    arm.position.set(side * 0.62, -1.12, 0.02)
-    arm.rotation.z = side * 0.15
-    character.add(arm)
+  const body = buildWiiBody(shirt, matte(bin, cssColor(BODY_COLORS.pants), gradient))
+  body.traverse((child) => {
+    if (child instanceof THREE.Mesh) trackMesh(child, bin)
   })
-  character.add(neck, torso)
+  body.scale.setScalar((2 * face.rx) / FFL_FACE_WIDTH)
+  body.position.y = -face.ry
+  character.add(body)
   character.position.y = 1.34
   return character
-}
-
-function contactShadowTexture() {
-  const canvas = document.createElement("canvas")
-  canvas.width = 128
-  canvas.height = 128
-  const context = canvas.getContext("2d")
-  if (!context) return null
-  const gradient = context.createRadialGradient(64, 64, 10, 64, 64, 62)
-  gradient.addColorStop(0, "rgba(72, 104, 108, 0.32)")
-  gradient.addColorStop(1, "rgba(72, 104, 108, 0)")
-  context.fillStyle = gradient
-  context.fillRect(0, 0, 128, 128)
-  const texture = new THREE.CanvasTexture(canvas)
-  texture.colorSpace = THREE.SRGBColorSpace
-  return texture
 }
 
 function fallbackLook(mii: MiiLook): MiiLook {
@@ -739,8 +723,8 @@ export function MiiWebGLPreview({
 
     const scene = new THREE.Scene()
     const camera = new THREE.PerspectiveCamera(22, 1, 0.1, 40)
-    camera.position.set(0, 1.2, 7.6)
-    camera.lookAt(0, 1.08, 0)
+    camera.position.set(0, 0.26, 11.4)
+    camera.lookAt(0, 0.26, 0)
 
     const gradient = toonGradient()
     const shineMap = shineTexture()
@@ -768,26 +752,6 @@ export function MiiWebGLPreview({
     key.position.set(-0.3, 2.2, 4.2)
     scene.add(key)
 
-    const ground = new THREE.Mesh(
-      new THREE.CircleGeometry(1.15, 48),
-      new THREE.ShadowMaterial({ opacity: 0 }),
-    )
-    ground.rotation.x = -Math.PI / 2
-    ground.position.y = 0.12
-    scene.add(ground)
-    const blobMap = contactShadowTexture()
-    const blob = blobMap
-      ? new THREE.Mesh(
-          new THREE.CircleGeometry(0.72, 40),
-          new THREE.MeshBasicMaterial({ map: blobMap, transparent: true, depthWrite: false }),
-        )
-      : null
-    if (blob) {
-      blob.rotation.x = -Math.PI / 2
-      blob.position.y = 0.19
-      scene.add(blob)
-    }
-
     let character: THREE.Group | null = null
     let builtRevision = -1
     const rebuild = () => {
@@ -809,11 +773,16 @@ export function MiiWebGLPreview({
     let lastY = 0
     let lastMove = performance.now()
     let lastFrame = performance.now()
+    const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)")
 
     const reset = () => {
-      resetting = true
       velYaw = 0
       velPitch = 0
+      if (reducedMotion.matches) {
+        yaw = pitch = 0
+        return
+      }
+      resetting = true
     }
     resetRef.current = reset
 
@@ -851,6 +820,10 @@ export function MiiWebGLPreview({
     const endDrag = (event: PointerEvent) => {
       if (!dragging) return
       dragging = false
+      if (reducedMotion.matches) {
+        velYaw = 0
+        velPitch = 0
+      }
       if (host.hasPointerCapture(event.pointerId)) host.releasePointerCapture(event.pointerId)
     }
     const onLost = (event: Event) => {
@@ -921,13 +894,6 @@ export function MiiWebGLPreview({
       host.removeEventListener("dblclick", reset)
       canvas.removeEventListener("webglcontextlost", onLost)
       if (character) disposeObject(character)
-      ground.geometry.dispose()
-      ;(ground.material as THREE.Material).dispose()
-      if (blob) {
-        blob.geometry.dispose()
-        ;(blob.material as THREE.Material).dispose()
-      }
-      blobMap?.dispose()
       gradient.dispose()
       shineMap?.dispose()
       eyes.outline?.dispose()
@@ -950,7 +916,10 @@ export function MiiWebGLPreview({
         <button
           type="button"
           data-focusable
-          onClick={() => resetRef.current()}
+          onClick={() => {
+            playSfx("select")
+            resetRef.current()
+          }}
           aria-label="Reset preview to front view"
         >
           Front view

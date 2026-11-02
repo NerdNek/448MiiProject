@@ -5,6 +5,7 @@ export type StoredMii = {
   skinTone: string
   hairStyle: number
   hairHue: number
+  hairCustom?: string | null
   eyebrowStyle: number
   eyebrowY: number
   eyebrowX: number
@@ -12,6 +13,7 @@ export type StoredMii = {
   eyebrowRotation: number
   eyeStyle: number
   eyeHue: number
+  eyeCustom?: string | null
   eyeY: number
   eyeX: number
   eyeSize: number
@@ -23,10 +25,12 @@ export type StoredMii = {
   mouthY: number
   mouthSize: number
   mouthColor: number
+  mouthCustom?: string | null
   glasses: number
   glassY: number
   glassSize: number
   glassColor: number
+  glassCustom?: string | null
   facialHair: number
   mustacheY: number
   mustacheSize: number
@@ -124,6 +128,10 @@ function isMii(value: unknown): value is StoredMii {
   const record = value as Record<string, unknown>
   if (typeof record.name !== "string" || record.name.length > 12) return false
   if (typeof record.gender !== "string" || !genders.includes(record.gender)) return false
+  for (const field of ["hairCustom", "eyeCustom", "mouthCustom", "glassCustom"]) {
+    const value = record[field]
+    if (value != null && (typeof value !== "string" || !/^#[0-9a-f]{6}$/i.test(value))) return false
+  }
   const skinTone = record.skinTone
   if (typeof skinTone !== "string") return false
   if (!/^#[0-9a-f]{6}$/i.test(skinTone)) return false

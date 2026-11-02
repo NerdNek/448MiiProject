@@ -74,7 +74,7 @@ Replace `YOUR_USERNAME` with the repository owner's GitHub username, or copy the
 The 3D FFL preview and feature thumbnails need `AFLResHigh_2_3.dat` at `public/ffl/asset/model/character/mii/AFLResHigh_2_3.dat`. This local resource is not included in the repository. Without it, the app uses an approximate fallback preview and FFL thumbnails are unavailable. See [credits and resource details](CREDITS.md).
 
 
-The FFL head is shown with a simple procedural torso inspired by the Wii Mii Channel; the torso is not an original Wii model.
+The FFL head sits on a handmade body in `src/mii-body.ts`. Its proportions follow Mii Channel screenshots, but it is not Nintendo's Wii body model.
 
 ### Optional background music
 
@@ -111,8 +111,8 @@ These are implementation limits, not results from a user test:
 - **Save Mii** stores the appearance and profile in this browser on this device. Refresh the page and choose **Restore saved Mii**. Nothing is uploaded, and another browser or device will not have the save.
 - **Navigation** uses an icon-and-label row for the customization categories. Sections can be visited in any order.
 - **Keyboard:** arrows move focus, Enter selects, Esc returns to Face, and Ctrl/Cmd+Z and Ctrl/Cmd+Shift+Z undo and redo. Text fields keep normal text undo. Gamepad controls are not implemented.
-- **Long lists** such as hair and eyes are shown 12 at a time, with the color control above the list.
-- **Colors:** Skin, hair, and eye sliders blend between the renderer's preset colors for custom shades in the 3D preview. Eyebrows and moustaches use the nearest original hair shade. Mouth and glasses colors use fixed presets. The fallback preview may approximate custom hair and eye colors.
+- **Long lists** such as hair and eyes are shown 12 at a time, with previous/next controls and page-dot indicators (screen readers still hear the page and range). Color controls stay above the list.
+- **Colors:** Skin, hair, eyes, mouth, and glasses frames offer preset swatches and a Custom color picker with hue, saturation, and brightness controls. The selected hex is saved with the Mii. The FFL preview tints its materials and face textures to approximate custom colors; shading and feature artwork affect the visible result. Some mouth styles do not have a colorable region. The fallback preview is approximate and does not reproduce every custom feature color.
 - **3D preview** needs the local Miitomo resource described above. Without it, the page uses the approximate fallback preview.
 - The head is drawn with FFL.js's Wii U shader port, not Nintendo's original Wii renderer.
 
@@ -125,6 +125,7 @@ These are implementation limits, not results from a user test:
 │   ├── App.tsx         # Main React application and interface interactions
 │   ├── index.css       # Global styles, layout, and visual design
 │   ├── main.tsx        # React entry point; mounts the app
+│   ├── mii-body.ts     # Handmade Wii-inspired body under the 3D head
 │   ├── sfx.ts          # Sound-effect mapping, playback, and mute state
 │   └── vite-env.d.ts   # Type declarations for Vite
 ├── tools/

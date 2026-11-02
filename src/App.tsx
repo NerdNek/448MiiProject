@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { FeatureThumb } from "./ffl-thumb"
 import { fflCounts, getFflSession } from "./ffl/runtime"
 import type { ThumbPart } from "./ffl/runtime"
-import { eyePalette, facePalette, glassPalette, hairPalette, mouthPalette, gradientColor, gradientPosition, type PaletteColor } from "./ffl/palette"
+import { eyePalette, facePalette, glassPalette, hairPalette, mouthPalette, gradientColor, gradientPosition, hexToHsv, hsvToHex, type PaletteColor } from "./ffl/palette"
 import { readSavedMii, writeSavedMii, type StoredMii } from "./mii-storage"
 import { FflPreview } from "./ffl-preview"
 import { maskedSprite } from "./masked-sprite"
@@ -16,6 +16,7 @@ type MiiState = {
   skinTone: string
   hairStyle: number
   hairHue: number
+  hairCustom?: string | null
   eyebrowStyle: number
   eyebrowY: number
   eyebrowX: number
@@ -23,6 +24,7 @@ type MiiState = {
   eyebrowRotation: number
   eyeStyle: number
   eyeHue: number
+  eyeCustom?: string | null
   eyeY: number
   eyeX: number
   eyeSize: number
@@ -34,10 +36,12 @@ type MiiState = {
   mouthY: number
   mouthSize: number
   mouthColor: number
+  mouthCustom?: string | null
   glasses: number
   glassY: number
   glassSize: number
   glassColor: number
+  glassCustom?: string | null
   facialHair: number
   mustacheY: number
   mustacheSize: number
@@ -700,9 +704,16 @@ function ChoiceGrid({
   const pageSize = count > 18 ? 12 : count
   const pageCount = Math.max(1, Math.ceil(count / pageSize))
   const [page, setPage] = useState(() => Math.floor(selected / pageSize))
+  const turned = useRef(false)
+  const turnTo = (next: number) => {
+    playSfx("select")
+    turned.current = true
+    setPage(next)
+  }
   const listKey = useRef(part)
   if (listKey.current !== part) {
     listKey.current = part
+    turned.current = false
     setPage(Math.floor(selected / pageSize))
   }
   useEffect(() => {
@@ -711,27 +722,61 @@ function ChoiceGrid({
   const start = page * pageSize
   const visible = Array.from({ length: Math.min(pageSize, count - start) }, (_, offset) => start + offset)
   const selectedVisible = selected >= start && selected < start + pageSize
+  const pageLabel = `Page ${page + 1} of ${pageCount}, showing ${type} ${start + 1} to ${start + visible.length} of ${count}`
   return (
     <div className="choice-browser">
       {pageCount > 1 && (
-        <div className="choice-pager">
-          <button type="button" onClick={() => { playSfx("select"); setPage((current) => Math.max(0, current - 1)) }} disabled={page === 0} data-focusable>
-            Previous
+        <div className="choice-pager" role="navigation" aria-label={`${type} pages`}>
+          <button
+            type="button"
+            className="pager-step"
+            onClick={() => turnTo(Math.max(0, page - 1))}
+            disabled={page === 0}
+            aria-label={`Previous ${type} page`}
+            data-focusable
+          >
+            ‹
           </button>
-          <span>
-            {start + 1}–{start + visible.length} of {count}
+          <div className="pager-dots" role="group" aria-label={pageLabel}>
+            {Array.from({ length: pageCount }, (_, index) => (
+              <button
+                key={index}
+                type="button"
+                className={index === page ? "pager-dot active" : "pager-dot"}
+                onClick={() => turnTo(index)}
+                aria-label={`${type} page ${index + 1} of ${pageCount}`}
+                aria-current={index === page ? "page" : undefined}
+                data-focusable
+              />
+            ))}
+          </div>
+          <button
+            type="button"
+            className="pager-step"
+            onClick={() => turnTo(Math.min(pageCount - 1, page + 1))}
+            disabled={page >= pageCount - 1}
+            aria-label={`Next ${type} page`}
+            data-focusable
+          >
+            ›
+          </button>
+          <span className="sr-only" aria-live="polite">
+            {pageLabel}
           </span>
-          <button type="button" onClick={() => { playSfx("select"); setPage((current) => Math.min(pageCount - 1, current + 1)) }} disabled={page >= pageCount - 1} data-focusable>
-            Next
-          </button>
           {!selectedVisible && (
-            <button type="button" onClick={() => { playSfx("select"); setPage(Math.floor(selected / pageSize)) }} data-focusable>
-              Show selected {type} {selected + 1}
+            <button
+              type="button"
+              className="pager-jump"
+              onClick={() => turnTo(Math.floor(selected / pageSize))}
+              aria-label={`Show selected ${type} ${selected + 1}`}
+              data-focusable
+            >
+              Selected
             </button>
           )}
         </div>
       )}
-      <div className={count > 9 ? "choice-grid dense" : "choice-grid"}>
+      <div className={`choice-grid${count > 9 ? " dense" : ""}${turned.current ? " page-enter" : ""}`} key={page}>
         {visible.map((index) => (
           <button
             className={`feature-choice ${selected === index ? "selected" : ""}`}
@@ -766,6 +811,8 @@ function ColorControl({
   label,
   smooth = false,
   hex,
+  custom,
+  onCustom,
 }: {
   value: number
   onChange: (value: number) => void
@@ -773,23 +820,53 @@ function ColorControl({
   label: string
   smooth?: boolean
   hex?: string
+  custom?: string | null
+  onCustom?: (hex: string | null) => void
 }) {
+  const [spectrumOpen, setSpectrumOpen] = useState(() => Boolean(custom && onCustom))
   const index = Math.min(Math.max(value, 0), palette.length - 1)
-  const isPreset = Number.isInteger(index)
-  const chosenColor = (hex ?? gradientColor(palette, index)).toUpperCase()
+  const chosenColor = (custom ?? hex ?? gradientColor(palette, index)).toUpperCase()
+  const presetIndex = palette.findIndex((entry) => entry.hex.toUpperCase() === chosenColor)
+  const isPreset = presetIndex >= 0
+  const rawHsv = hexToHsv(chosenColor)
+  const hueMemory = useRef(rawHsv.h)
+  const saturationMemory = useRef(rawHsv.s || 1)
+  if (rawHsv.v > 0 && rawHsv.s > 0) hueMemory.current = rawHsv.h
+  if (rawHsv.v > 0) saturationMemory.current = rawHsv.s
+  const hsv = { h: rawHsv.s > 0 ? rawHsv.h : hueMemory.current, s: rawHsv.v > 0 ? rawHsv.s : saturationMemory.current, v: rawHsv.v }
+  const spectrumId = `${label.toLowerCase().replace(/\s+/g, "-")}-custom`
   const valueText = isPreset
-    ? `${palette[index].name}, ${chosenColor}, preset ${index + 1} of ${palette.length}`
-    : `Custom shade ${chosenColor}, between ${palette[Math.floor(index)].name} and ${palette[Math.ceil(index)].name}`
+    ? `${palette[presetIndex].name}, ${chosenColor}, preset ${presetIndex + 1} of ${palette.length}`
+    : `Custom shade ${chosenColor}`
   const sliderId = `${label.toLowerCase().replace(/\s+/g, "-")}-palette`
   const sliderSfx = useSliderSfx()
+  const pickCustom = (next: string) => {
+    if (!onCustom) return
+    onCustom(next)
+  }
   return (
-    <div className="color-control">
+    <div className={`color-control${onCustom ? " color-control-custom" : ""}`}>
       <div className="control-label-row">
         <label htmlFor={sliderId}>{label}</label>
-        {/* The slider's aria-valuetext announces the name and hex; this is the visual readout. */}
-        <output htmlFor={sliderId} aria-hidden="true">
+        <output htmlFor={sliderId} className="color-hex" aria-live="polite">
           {chosenColor}
         </output>
+      </div>
+      <div className="swatch-row" role="group" aria-label={`${label} presets`}>
+        {palette.map((entry, entryIndex) => (
+          <button
+            key={entry.hex}
+            className={entryIndex === presetIndex ? "swatch active" : "swatch"}
+            style={{ background: entry.hex }}
+            onClick={() => {
+              playSfx("select")
+              onChange(entryIndex)
+            }}
+            data-focusable
+            aria-label={`${label} ${entry.name}, ${entry.hex.toUpperCase()}, preset ${entryIndex + 1} of ${palette.length}`}
+            aria-pressed={entryIndex === presetIndex}
+          />
+        ))}
       </div>
       <div className="hue-wrap">
         <input
@@ -799,7 +876,7 @@ function ColorControl({
           min="0"
           max={palette.length - 1}
           step={smooth ? "0.01" : "1"}
-          value={index}
+          value={isPreset || !onCustom ? index : Math.max(0, Math.min(palette.length - 1, index))}
           onPointerDown={sliderSfx.onPointerDown}
           onKeyDown={sliderSfx.onKeyDown}
           onKeyUp={sliderSfx.onKeyUp}
@@ -820,27 +897,73 @@ function ColorControl({
             background: chosenColor,
             left: `${(index / Math.max(1, palette.length - 1)) * 100}%`,
           }}
+          aria-hidden="true"
         />
       </div>
-      <div className="swatch-row" aria-label={`${label} choices`}>
-        {palette.map((entry, entryIndex) => (
+      {onCustom && (
+        <div className="spectrum-block">
           <button
-            key={entry.hex}
-            className={entryIndex === index ? "swatch active" : "swatch"}
-            style={{ background: entry.hex }}
+            type="button"
+            className="spectrum-toggle"
+            aria-expanded={spectrumOpen}
+            aria-controls={spectrumId}
             onClick={() => {
               playSfx("select")
-              onChange(entryIndex)
+              setSpectrumOpen(!spectrumOpen)
             }}
             data-focusable
-            aria-label={`${label} ${entry.name}, ${entry.hex.toUpperCase()}, preset ${entryIndex + 1} of ${palette.length}`}
-            aria-pressed={entryIndex === index}
-          />
-        ))}
-      </div>
-      <p className="microcopy">
-        {smooth ? "Drag for shades between presets, or choose a swatch." : `${palette.length} preset colors. The slider and swatches choose one of them.`}
-      </p>
+          >
+            {spectrumOpen ? "Hide custom" : "Custom color"}
+          </button>
+          {spectrumOpen && (
+            <div id={spectrumId} className="spectrum-panel">
+              <div className="spectrum-head">
+                <label className="spectrum-swatch">
+                  <span className="sr-only">Native color picker for {label}</span>
+                  <input
+                    type="color"
+                    value={chosenColor}
+                    onChange={(e) => pickCustom(e.target.value)}
+                    aria-label={`${label} custom color`}
+                    data-focusable
+                  />
+                </label>
+                <div className="spectrum-hex-field">
+                  <span aria-hidden="true">Hex</span>
+                  <output aria-live="polite">{chosenColor}</output>
+                </div>
+              </div>
+              {(
+                [
+                  ["Hue", 0, 360, Math.round(hsv.h), (v: number) => { hueMemory.current = v; return hsvToHex(v, hsv.s, hsv.v) }],
+                  ["Saturation", 0, 100, Math.round(hsv.s * 100), (v: number) => { saturationMemory.current = v / 100; return hsvToHex(hsv.h, v / 100, hsv.v) }],
+                  ["Brightness", 0, 100, Math.round(hsv.v * 100), (v: number) => hsvToHex(hsv.h, hsv.s, v / 100)],
+                ] as const
+              ).map(([name, min, max, current, change]) => (
+                <label className="spectrum-row" key={name}>
+                  <span>{name}</span>
+                  <input
+                    type="range"
+                    min={min}
+                    max={max}
+                    value={current}
+                    onPointerDown={sliderSfx.onPointerDown}
+                    onKeyDown={sliderSfx.onKeyDown}
+                    onKeyUp={sliderSfx.onKeyUp}
+                    onChange={(event) => {
+                      sliderSfx.changed()
+                      pickCustom(change(Number(event.target.value)))
+                    }}
+                    aria-label={`${label} ${name}`}
+                    data-focusable
+                  />
+                  <output aria-hidden="true">{current}</output>
+                </label>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   )
 }
@@ -1153,10 +1276,7 @@ export default function App() {
       case "face":
         return (
           <>
-            <SectionHeader
-              title="Choose a face"
-              subtitle="Start with a shape that feels like you."
-            />
+            <SectionHeader title="Face" subtitle="Shape and skin tone." />
             <ChoiceGrid
               count={fflCounts.faceType}
               selected={mii.faceShape}
@@ -1171,6 +1291,7 @@ export default function App() {
                 onChange={(index) => updateMii({ skinTone: gradientColor(skinGradient, index) })}
                 palette={skinGradient}
                 hex={mii.skinTone}
+                onCustom={(hex) => { if (hex) updateMii({ skinTone: hex }) }}
                 smooth
               />
             </div>
@@ -1179,19 +1300,18 @@ export default function App() {
       case "hair":
         return (
           <>
-            <SectionHeader
-              title="Choose a hairstyle"
-              subtitle="Every style is available to every Mii."
-            />
+            <SectionHeader title="Hair" subtitle="Style and color." />
             <div className="subsection choice-color">
               <ColorControl
                 value={mii.hairHue}
-                onChange={(hairHue) => updateMii({ hairHue })}
+                custom={mii.hairCustom}
+                onCustom={(hairCustom) => updateMii({ hairCustom })}
+                onChange={(hairHue) => updateMii({ hairHue, hairCustom: null })}
                 palette={hairPalette}
                 label="Hair color"
                 smooth
               />
-              <p className="microcopy">Eyebrows and moustaches use the nearest original shade.</p>
+
             </div>
             <ChoiceGrid
               count={fflCounts.hairType}
@@ -1205,10 +1325,7 @@ export default function App() {
       case "eyebrows":
         return (
           <>
-            <SectionHeader
-              title="Choose eyebrows"
-              subtitle="Add expression with a shape that suits your Mii."
-            />
+            <SectionHeader title="Brows" subtitle="Shape; position on the right. Color follows hair." />
             <ChoiceGrid
               count={fflCounts.eyebrowType}
               selected={mii.eyebrowStyle}
@@ -1216,22 +1333,18 @@ export default function App() {
               type="brows"
               part="brows"
             />
-            <Tip>
-              Adjust eyebrow position independently in the fine-tune panel. Their color matches the hair color.
-            </Tip>
           </>
         )
       case "eyes":
         return (
           <>
-            <SectionHeader
-              title="Choose eyes"
-              subtitle="Select a shape, then fine-tune it on the right."
-            />
+            <SectionHeader title="Eyes" subtitle="Shape, color, and placement." />
             <div className="subsection choice-color">
               <ColorControl
                 value={mii.eyeHue}
-                onChange={(eyeHue) => updateMii({ eyeHue })}
+                custom={mii.eyeCustom}
+                onCustom={(eyeCustom) => updateMii({ eyeCustom })}
+                onChange={(eyeHue) => updateMii({ eyeHue, eyeCustom: null })}
                 palette={eyePalette}
                 label="Eye color"
                 smooth
@@ -1249,10 +1362,7 @@ export default function App() {
       case "nose":
         return (
           <>
-            <SectionHeader
-              title="Choose a nose"
-              subtitle="Simple, expressive shapes in classic Mii style."
-            />
+            <SectionHeader title="Nose" subtitle="Shape and placement." />
             <ChoiceGrid
               count={fflCounts.noseType}
               selected={mii.noseStyle}
@@ -1265,14 +1375,13 @@ export default function App() {
       case "mouth":
         return (
           <>
-            <SectionHeader
-              title="Choose a mouth"
-              subtitle="Give your Mii a little personality."
-            />
+            <SectionHeader title="Mouth" subtitle="Shape and lip color." />
             <div className="subsection choice-color">
               <ColorControl
                 value={mii.mouthColor}
-                onChange={(mouthColor) => updateMii({ mouthColor })}
+                custom={mii.mouthCustom}
+                onCustom={(mouthCustom) => updateMii({ mouthCustom })}
+                onChange={(mouthColor) => updateMii({ mouthColor, mouthCustom: null })}
                 palette={mouthPalette}
                 label="Mouth color"
               />
@@ -1289,10 +1398,7 @@ export default function App() {
       case "glasses":
         return (
           <>
-            <SectionHeader
-              title="Choose glasses"
-              subtitle="Optional eyewear for any look."
-            />
+            <SectionHeader title="Glasses" subtitle="Optional. Frame color on the right." />
             <ChoiceGrid
               count={fflCounts.glass}
               selected={mii.glasses}
@@ -1305,10 +1411,7 @@ export default function App() {
       case "facialHair":
         return (
           <>
-            <SectionHeader
-              title="Choose facial hair"
-              subtitle="Mix and match freely—there are no restrictions."
-            />
+            <SectionHeader title="Facial hair" subtitle="First option is none. Color follows hair." />
             <h3 className="subsection-label">Moustache</h3>
             <ChoiceGrid
               count={fflCounts.mustache}
@@ -1325,18 +1428,12 @@ export default function App() {
               type="beard"
               part="beard"
             />
-            <Tip>
-              The first option in each row is none. Color follows the hair color. Position and size on the right move the moustache only; the beard shape has no separate position.
-            </Tip>
           </>
         )
       case "accessories":
         return (
           <>
-            <SectionHeader
-              title="Add a beauty mark"
-              subtitle="Turn the mole on, then move and resize it on the right. Other extras are not in this renderer."
-            />
+            <SectionHeader title="Extras" subtitle="Beauty mark; place it on the right." />
             <ChoiceGrid
               count={fflCounts.mole}
               selected={mii.accessory > 0 ? 1 : 0}
@@ -1349,10 +1446,7 @@ export default function App() {
       case "profile":
         return (
           <>
-            <SectionHeader
-              title="Your Mii's profile"
-              subtitle="Name and identity details can be changed anytime."
-            />
+            <SectionHeader title="Profile" subtitle="Name and identity." />
             <div className="name-field-wrap">
               <label htmlFor="mii-name">Mii name</label>
               <input
@@ -1427,10 +1521,9 @@ export default function App() {
         </div>
         <nav className="category-nav" aria-label="Customization categories">
           {categories.map((item) => (
-            <button key={item.id} type="button" className={category === item.id ? "category active" : "category"} onClick={() => { playSfx("select"); goTo(item.id) }} title={item.hint} data-focusable aria-current={category === item.id ? "page" : undefined}>
+            <button key={item.id} type="button" className={category === item.id ? "category active" : "category"} onClick={() => { playSfx("select"); goTo(item.id) }} title={item.hint} aria-label={`${item.label}. ${item.hint}`} data-focusable aria-current={category === item.id ? "page" : undefined}>
               <Icon name={item.id} size={21} />
               <span>{item.label}</span>
-              <small>{item.hint}</small>
             </button>
           ))}
         </nav>
@@ -1451,7 +1544,7 @@ export default function App() {
             <strong>{mii.name || "Unnamed Mii"}</strong>
             <span>FFL preview · Wii U shader port</span>
           </div>
-          <p className="save-note">Save Mii keeps appearance and profile in this browser on this device. It is not uploaded.</p>
+          <p className="save-note">Saved in this browser only.</p>
           {storageError && <p className="save-note storage-error">{storageError}</p>}
           {storedMii && (
             <div className="saved-banner">
@@ -1470,36 +1563,35 @@ export default function App() {
             <Icon name={category} size={18} />
             <span>{activeCategory.label}</span>
           </div>
-          {renderCenter()}
+          <div className="section-enter" key={category}>
+            {renderCenter()}
+          </div>
         </section>
 
         <aside className="adjust-panel" aria-label="Contextual adjustments">
+          <div className="section-enter" key={category}>
           {category === "eyebrows" ? (
             <>
-              <div className="adjust-title"><div><span className="eyebrow">Fine tune</span><h2>Eyebrow adjustments</h2></div><span className="context-icon"><Icon name="eyebrows" /></span></div>
-              <p className="adjust-intro">Adjust eyebrows independently from the eyes.</p>
+              <div className="adjust-title"><div><span className="eyebrow">Fine tune</span><h2>Eyebrows</h2></div><span className="context-icon"><Icon name="eyebrows" /></span></div>
               {fflRanges ? <>
                 <AdjustRow label="Vertical position" value={mii.eyebrowY} {...fflRanges.brows.y} step={1} leftIcon="down" rightIcon="up" onChange={(eyebrowY) => updateMii({ eyebrowY })} />
                 <AdjustRow label="Spacing" value={mii.eyebrowX} {...fflRanges.brows.x} step={1} leftIcon="left" rightIcon="right" onChange={(eyebrowX) => updateMii({ eyebrowX })} />
                 <AdjustRow label="Size" value={mii.eyebrowSize} {...fflRanges.brows.scale} step={1} leftIcon="minus" rightIcon="plus" onChange={(eyebrowSize) => updateMii({ eyebrowSize })} />
                 <AdjustRow label="Rotation" value={mii.eyebrowRotation} {...fflRanges.brows.rotate} step={1} leftIcon="rotateLeft" rightIcon="rotateRight" onChange={(eyebrowRotation) => updateMii({ eyebrowRotation })} />
-                <button className="reset-button" onClick={() => resetMii(eyebrowDefaults, "Eyebrow adjustments reset")} data-focusable>Reset eyebrow adjustments</button>
-              </> : <p className="adjust-intro">Eyebrow adjustments require the FFL preview.</p>}
+                <button className="reset-button" onClick={() => resetMii(eyebrowDefaults, "Eyebrow adjustments reset")} data-focusable>Reset</button>
+              </> : <p className="adjust-intro">Needs the 3D preview.</p>}
             </>
           ) : category === "eyes" ? (
             <>
               <div className="adjust-title">
                 <div>
                   <span className="eyebrow">Fine tune</span>
-                  <h2>Eye adjustments</h2>
+                  <h2>Eyes</h2>
                 </div>
                 <span className="context-icon">
                   <Icon name="eyes" />
                 </span>
               </div>
-              <p className="adjust-intro">
-                These steps adjust the eyes independently from the eyebrows.
-              </p>
               <AdjustRow
                 label="Vertical position"
                 value={mii.eyeY}
@@ -1547,72 +1639,67 @@ export default function App() {
                 }
                 data-focusable
               >
-                Reset eye adjustments
+                Reset
               </button>
             </>
           ) : category === "glasses" ? (
             <>
-              <div className="adjust-title"><div><span className="eyebrow">Fine tune</span><h2>Glasses adjustments</h2></div><span className="context-icon"><Icon name="glasses" /></span></div>
+              <div className="adjust-title"><div><span className="eyebrow">Fine tune</span><h2>Glasses</h2></div><span className="context-icon"><Icon name="glasses" /></span></div>
               {mii.glasses === 0 ? (
-                <p className="adjust-intro">Choose a glasses style first. Position, size, and frame color apply to that style.</p>
+                <p className="adjust-intro">Pick a style first.</p>
               ) : fflRanges ? (
                 <>
-                  <p className="adjust-intro">These steps move and resize the selected glasses.</p>
                   <AdjustRow label="Vertical position" value={mii.glassY} {...fflRanges.glasses.y} step={1} leftIcon="down" rightIcon="up" onChange={(glassY) => updateMii({ glassY })} />
                   <AdjustRow label="Size" value={mii.glassSize} {...fflRanges.glasses.scale} step={1} leftIcon="minus" rightIcon="plus" onChange={(glassSize) => updateMii({ glassSize })} />
-                  <ColorControl value={mii.glassColor} onChange={(glassColor) => updateMii({ glassColor })} palette={glassPalette} label="Frame color" />
-                  <button className="reset-button" onClick={() => resetMii({ glassY: 10, glassSize: 4, glassColor: 0 }, "Glasses adjustments reset")} data-focusable>Reset glasses adjustments</button>
+                  <ColorControl custom={mii.glassCustom} onCustom={(glassCustom) => updateMii({ glassCustom })} value={mii.glassColor} onChange={(glassColor) => updateMii({ glassColor, glassCustom: null })} palette={glassPalette} label="Frame color" />
+                  <button className="reset-button" onClick={() => resetMii({ glassY: 10, glassSize: 4, glassColor: 0, glassCustom: null }, "Glasses adjustments reset")} data-focusable>Reset</button>
                 </>
-              ) : <p className="adjust-intro">Glasses adjustments require the FFL preview.</p>}
+              ) : <p className="adjust-intro">Needs the 3D preview.</p>}
             </>
           ) : category === "facialHair" ? (
             <>
-              <div className="adjust-title"><div><span className="eyebrow">Fine tune</span><h2>Moustache adjustments</h2></div><span className="context-icon"><Icon name="facialHair" /></span></div>
+              <div className="adjust-title"><div><span className="eyebrow">Fine tune</span><h2>Moustache</h2></div><span className="context-icon"><Icon name="facialHair" /></span></div>
               {mii.facialHair === 0 ? (
-                <p className="adjust-intro">Choose a moustache to change its position and size. Beard shapes do not have a separate position control.</p>
+                <p className="adjust-intro">Pick a moustache to place it. Beards have no separate position.</p>
               ) : fflRanges ? (
                 <>
-                  <p className="adjust-intro">These steps move the moustache. Beard color still follows the hair color.</p>
                   <AdjustRow label="Vertical position" value={mii.mustacheY} {...fflRanges.mustache.y} step={1} leftIcon="down" rightIcon="up" onChange={(mustacheY) => updateMii({ mustacheY })} />
                   <AdjustRow label="Size" value={mii.mustacheSize} {...fflRanges.mustache.scale} step={1} leftIcon="minus" rightIcon="plus" onChange={(mustacheSize) => updateMii({ mustacheSize })} />
-                  <button className="reset-button" onClick={() => resetMii({ mustacheY: 10, mustacheSize: 4 }, "Moustache adjustments reset")} data-focusable>Reset moustache adjustments</button>
+                  <button className="reset-button" onClick={() => resetMii({ mustacheY: 10, mustacheSize: 4 }, "Moustache adjustments reset")} data-focusable>Reset</button>
                 </>
-              ) : <p className="adjust-intro">Moustache adjustments require the FFL preview.</p>}
+              ) : <p className="adjust-intro">Needs the 3D preview.</p>}
             </>
           ) : category === "accessories" ? (
             <>
-              <div className="adjust-title"><div><span className="eyebrow">Fine tune</span><h2>Mole adjustments</h2></div><span className="context-icon"><Icon name="accessories" /></span></div>
+              <div className="adjust-title"><div><span className="eyebrow">Fine tune</span><h2>Beauty mark</h2></div><span className="context-icon"><Icon name="accessories" /></span></div>
               {mii.accessory === 0 ? (
-                <p className="adjust-intro">Turn the beauty mark on to move and resize it.</p>
+                <p className="adjust-intro">Turn it on to place it.</p>
               ) : fflRanges ? (
                 <>
-                  <p className="adjust-intro">These steps place the mole on the face.</p>
                   <AdjustRow label="Vertical position" value={mii.moleY} {...fflRanges.mole.y} step={1} leftIcon="down" rightIcon="up" onChange={(moleY) => updateMii({ moleY })} />
                   <AdjustRow label="Horizontal position" value={mii.moleX} {...fflRanges.mole.x} step={1} leftIcon="left" rightIcon="right" onChange={(moleX) => updateMii({ moleX })} />
                   <AdjustRow label="Size" value={mii.moleSize} {...fflRanges.mole.scale} step={1} leftIcon="minus" rightIcon="plus" onChange={(moleSize) => updateMii({ moleSize })} />
-                  <button className="reset-button" onClick={() => resetMii({ moleX: 8, moleY: 8, moleSize: 4 }, "Mole adjustments reset")} data-focusable>Reset mole adjustments</button>
+                  <button className="reset-button" onClick={() => resetMii({ moleX: 8, moleY: 8, moleSize: 4 }, "Mole adjustments reset")} data-focusable>Reset</button>
                 </>
-              ) : <p className="adjust-intro">Mole adjustments require the FFL preview.</p>}
+              ) : <p className="adjust-intro">Needs the 3D preview.</p>}
             </>
           ) : category === "nose" ? (
             <>
-              <div className="adjust-title"><div><span className="eyebrow">Fine tune</span><h2>Nose adjustments</h2></div><span className="context-icon"><Icon name="nose" /></span></div>
-              <p className="adjust-intro">Adjust vertical position and size independently.</p>
+              <div className="adjust-title"><div><span className="eyebrow">Fine tune</span><h2>Nose</h2></div><span className="context-icon"><Icon name="nose" /></span></div>
               {fflRanges ? <>
                 <AdjustRow label="Vertical position" value={mii.noseY} {...fflRanges.nose.y} step={1} leftIcon="up" rightIcon="down" onChange={(noseY) => updateMii({ noseY })} />
                 <AdjustRow label="Size" value={mii.noseSize} {...fflRanges.nose.scale} step={1} leftIcon="minus" rightIcon="plus" onChange={(noseSize) => updateMii({ noseSize })} />
-                <button className="reset-button" onClick={() => resetMii({ noseY: 9, noseSize: 4 }, "Nose adjustments reset")} data-focusable>Reset nose adjustments</button>
-              </> : <p className="adjust-intro">Adjustments require the FFL preview.</p>}
+                <button className="reset-button" onClick={() => resetMii({ noseY: 9, noseSize: 4 }, "Nose adjustments reset")} data-focusable>Reset</button>
+              </> : <p className="adjust-intro">Needs the 3D preview.</p>}
             </>
           ) : category === "mouth" ? (
             <>
-              <div className="adjust-title"><div><span className="eyebrow">Fine tune</span><h2>Mouth adjustments</h2></div><span className="context-icon"><Icon name="mouth" /></span></div>
-              <p className="adjust-intro">Adjust vertical position and size independently.</p>
+              <div className="adjust-title"><div><span className="eyebrow">Fine tune</span><h2>Mouth</h2></div><span className="context-icon"><Icon name="mouth" /></span></div>
               {fflRanges ? <>
                 <AdjustRow label="Vertical position" value={mii.mouthY} {...fflRanges.mouth.y} step={1} leftIcon="up" rightIcon="down" onChange={(mouthY) => updateMii({ mouthY })} />
                 <AdjustRow label="Size" value={mii.mouthSize} {...fflRanges.mouth.scale} step={1} leftIcon="minus" rightIcon="plus" onChange={(mouthSize) => updateMii({ mouthSize })} />
-                <button className="reset-button" onClick={() => resetMii({ mouthY: 13, mouthSize: 4 }, "Mouth adjustments reset")} data-focusable>Reset mouth adjustments</button>
-              </> : <p className="adjust-intro">Adjustments require the FFL preview.</p>}
+                <button className="reset-button" onClick={() => resetMii({ mouthY: 13, mouthSize: 4 }, "Mouth adjustments reset")} data-focusable>Reset</button>
+              </> : <p className="adjust-intro">Needs the 3D preview.</p>}
             </>
           ) : category === "profile" ? (
             <>
@@ -1691,31 +1778,20 @@ export default function App() {
                     </button>
                   ))}
                 </div>
-                <p>This never limits which features you can use.</p>
               </div>
-              <Tip>Profile details stay in this browser. Save Mii stores them with the appearance on this device only.</Tip>
             </>
           ) : (
             <>
               <div className="adjust-title">
                 <div>
-                  <span className="eyebrow">Quick help</span>
+                  <span className="eyebrow">Shortcuts</span>
                   <h2>{activeCategory.label}</h2>
                 </div>
                 <span className="context-icon">
                   <Icon name={category} />
                 </span>
               </div>
-              <div className="help-card">
-                <Icon name="info" size={25} />
-                <div>
-                  <strong>{activeCategory.hint}</strong>
-                  <p>
-                    Choose any option in the center panel. Your selection is
-                    always reversible.
-                  </p>
-                </div>
-              </div>
+              <p className="adjust-intro">{activeCategory.hint}</p>
               <div className="navigation-help">
                 <h3>Keyboard</h3>
                 <div>
@@ -1733,9 +1809,14 @@ export default function App() {
                   <kbd className="wide">Esc</kbd>
                   <span>Back</span>
                 </div>
+                <div>
+                  <kbd className="wide">⌘Z</kbd>
+                  <span>Undo</span>
+                </div>
               </div>
             </>
           )}
+          </div>
         </aside>
       </section>
 
@@ -1825,11 +1906,3 @@ function SectionHeader({
   )
 }
 
-function Tip({ children }: { children: React.ReactNode }) {
-  return (
-    <div className="tip">
-      <Icon name="info" size={18} />
-      <span>{children}</span>
-    </div>
-  )
-}

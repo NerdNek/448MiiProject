@@ -38,6 +38,7 @@ export type FflMii = {
   skinTone: string
   hairStyle: number
   hairHue: number
+  hairCustom?: string | null
   eyebrowStyle: number
   eyebrowY: number
   eyebrowX: number
@@ -45,6 +46,7 @@ export type FflMii = {
   eyebrowRotation: number
   eyeStyle: number
   eyeHue: number
+  eyeCustom?: string | null
   eyeY: number
   eyeX: number
   eyeSize: number
@@ -56,10 +58,12 @@ export type FflMii = {
   mouthSize: number
   mouthStyle: number
   mouthColor: number
+  mouthCustom?: string | null
   glasses: number
   glassY: number
   glassSize: number
   glassColor: number
+  glassCustom?: string | null
   facialHair: number
   mustacheY: number
   mustacheSize: number
@@ -194,6 +198,7 @@ export function createCharModel(
   data: Uint8Array,
   renderer: THREE.WebGLRenderer,
   customEye?: number,
+  customColors?: Pick<FflMii, "eyeCustom" | "hairCustom" | "mouthCustom">,
 ) {
   const model = new CharModel(
     session.ffl,
@@ -205,8 +210,8 @@ export function createCharModel(
   )
   // The eye color is composited into the face mask. Override only the blue
   // (iris) channel while FFL builds that texture; leave whites and outlines intact.
-  if (customEye !== undefined && !Number.isInteger(customEye)) {
-    const hex = gradientColor(eyePalette, customEye)
+  if ((customEye !== undefined && !Number.isInteger(customEye)) || customColors?.eyeCustom || customColors?.hairCustom || customColors?.mouthCustom) {
+    const hex = customColors?.eyeCustom ?? gradientColor(eyePalette, customEye ?? 4)
     const iris = new THREE.Color().setRGB(
       parseInt(hex.slice(1, 3), 16) / 255,
       parseInt(hex.slice(3, 5), 16) / 255,
@@ -216,8 +221,17 @@ export function createCharModel(
       constructor(parameters?: THREE.ShaderMaterialParameters) {
         super(parameters)
         const opts = parameters as (THREE.ShaderMaterialParameters & { modulateType?: number }) | undefined
-        if (opts?.modulateType === 12) {
-          ;(this as unknown as { colorB: THREE.Color }).colorB = iris.clone()
+        const material = this as unknown as { color: THREE.Color; colorG: THREE.Color; colorB: THREE.Color }
+        const raw = (color: string) => new THREE.Color().setRGB(
+          parseInt(color.slice(1, 3), 16) / 255,
+          parseInt(color.slice(3, 5), 16) / 255,
+          parseInt(color.slice(5, 7), 16) / 255,
+        )
+        if (opts?.modulateType === 12 && (customColors?.eyeCustom || (customEye !== undefined && !Number.isInteger(customEye)))) material.colorB = iris.clone()
+        if ((opts?.modulateType === 9 || opts?.modulateType === 11) && customColors?.hairCustom) material.color = raw(customColors.hairCustom)
+        if (opts?.modulateType === 10 && customColors?.mouthCustom) {
+          material.color = raw(customColors.mouthCustom)
+          material.colorG = raw(customColors.mouthCustom).multiplyScalar(0.6)
         }
       }
     }
@@ -494,15 +508,16 @@ export function applyCustomColors(model: CharModel, mii: FflMii) {
   const targetSkin = rawColor(mii.skinTone)
   const skinIndex = model.charInfo.faceColor
   const baseSkin = rawColor(facePalette[skinIndex]?.hex ?? facePalette[0].hex)
-  const targetHair = rawColor(gradientColor(hairPalette, mii.hairHue))
+  const targetHair = rawColor(mii.hairCustom ?? gradientColor(hairPalette, mii.hairHue))
   const customSkin = !facePalette.some((entry) => entry.hex.toLowerCase() === mii.skinTone.toLowerCase())
-  const customHair = !Number.isInteger(mii.hairHue)
+  const customHair = Boolean(mii.hairCustom) || !Number.isInteger(mii.hairHue)
   for (const obj of model.meshes.children) {
     if (!(obj instanceof THREE.Mesh)) continue
     const kind = obj.geometry.userData.modulateType
     const mat = obj.material as FFLShaderMaterial & { color: THREE.Color; map: THREE.Texture | null }
     if (kind === 2 && customSkin) mat.color = targetSkin.clone()
     if ((kind === 4 || kind === 1) && customHair) mat.color = targetHair.clone()
+    if (kind === 8 && mii.glassCustom) mat.color = rawColor(mii.glassCustom)
     if (kind === 0 && customSkin) {
       if (mat.map) {
         const ratio = [targetSkin.r / Math.max(baseSkin.r, .001), targetSkin.g / Math.max(baseSkin.g, .001), targetSkin.b / Math.max(baseSkin.b, .001)].map((v) => v.toFixed(6)).join(",")

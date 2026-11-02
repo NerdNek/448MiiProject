@@ -106,3 +106,45 @@ export function gradientPosition(palette: PaletteColor[], hex: string) {
   }
   return best
 }
+
+export type Hsv = { h: number; s: number; v: number }
+export function hexToHsv(hex: string): Hsv {
+  const r = parseInt(hex.slice(1,3),16)/255, g = parseInt(hex.slice(3,5),16)/255, b = parseInt(hex.slice(5,7),16)/255
+  const max = Math.max(r, g, b)
+  const min = Math.min(r, g, b)
+  const delta = max - min
+  let h = 0
+  if (delta !== 0) {
+    const hue =
+      max === r
+        ? ((g - b) / delta) % 6
+        : max === g
+          ? (b - r) / delta + 2
+          : (r - g) / delta + 4
+    h = ((hue * 60) + 360) % 360
+  }
+  const s = max === 0 ? 0 : delta / max
+  return { h, s, v: max }
+}
+
+export function hsvToHex(h: number, s: number, v: number) {
+  const hue = ((h % 360) + 360) % 360
+  const sat = Math.min(1, Math.max(0, s))
+  const val = Math.min(1, Math.max(0, v))
+  const chroma = val * sat
+  const x = chroma * (1 - Math.abs(((hue / 60) % 2) - 1))
+  const m = val - chroma
+  let r = 0
+  let g = 0
+  let b = 0
+  if (hue < 60) [r, g, b] = [chroma, x, 0]
+  else if (hue < 120) [r, g, b] = [x, chroma, 0]
+  else if (hue < 180) [r, g, b] = [0, chroma, x]
+  else if (hue < 240) [r, g, b] = [0, x, chroma]
+  else if (hue < 300) [r, g, b] = [x, 0, chroma]
+  else [r, g, b] = [chroma, 0, x]
+  return `#${[r, g, b]
+    .map((channel) => Math.round((channel + m) * 255).toString(16).padStart(2, "0"))
+    .join("")}`
+}
+
