@@ -839,6 +839,7 @@ function ColorControl({
     ? `${palette[presetIndex].name}, ${chosenColor}, preset ${presetIndex + 1} of ${palette.length}`
     : `Custom shade ${chosenColor}`
   const sliderId = `${label.toLowerCase().replace(/\s+/g, "-")}-palette`
+  const paletteHelpId = `${sliderId}-keyboard-help`
   const sliderSfx = useSliderSfx()
   const pickCustom = (next: string) => {
     if (!onCustom) return
@@ -878,7 +879,20 @@ function ColorControl({
           step={smooth ? "0.01" : "1"}
           value={isPreset || !onCustom ? index : Math.max(0, Math.min(palette.length - 1, index))}
           onPointerDown={sliderSfx.onPointerDown}
-          onKeyDown={sliderSfx.onKeyDown}
+          onKeyDown={(event) => {
+            sliderSfx.onKeyDown(event)
+            if (!smooth || !["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(event.key)) return
+            event.preventDefault()
+            const direction = event.key === "ArrowLeft" || event.key === "ArrowDown" ? -1 : 1
+            const min = Number(event.currentTarget.min)
+            const max = Number(event.currentTarget.max)
+            const current = Number(event.currentTarget.value)
+            const next = Math.max(min, Math.min(max, current + direction * 0.1))
+            if (next !== current) {
+              sliderSfx.changed()
+              onChange(next)
+            }
+          }}
           onKeyUp={sliderSfx.onKeyUp}
           onChange={(e) => {
             sliderSfx.changed()
@@ -886,11 +900,15 @@ function ColorControl({
           }}
           data-focusable
           aria-label={`${label} palette`}
+          aria-describedby={paletteHelpId}
           aria-valuetext={valueText}
           style={{
             background: `linear-gradient(90deg, ${palette.map((entry) => entry.hex).join(", ")})`,
           }}
         />
+        <span id={paletteHelpId} className="sr-only">
+          Use arrow keys to adjust this color. Press Tab to move to the next control.
+        </span>
         <span
           className="hue-thumb-preview"
           style={{
@@ -925,8 +943,12 @@ function ColorControl({
                     value={chosenColor}
                     onChange={(e) => pickCustom(e.target.value)}
                     aria-label={`${label} custom color`}
+                    aria-describedby={`${spectrumId}-color-keyboard-help`}
                     data-focusable
                   />
+                  <span id={`${spectrumId}-color-keyboard-help`} className="sr-only">
+                    Press Enter or Space to open the color picker. Press Tab to move to the next control.
+                  </span>
                 </label>
                 <div className="spectrum-hex-field">
                   <span aria-hidden="true">Hex</span>
@@ -956,12 +978,16 @@ function ColorControl({
                         pickCustom(change(Number(event.target.value)))
                       }}
                       aria-label={`${label} ${name}`}
+                      aria-describedby={`${spectrumId}-slider-keyboard-help`}
                       data-focusable
                     />
                     <output aria-hidden="true">{current}</output>
                   </label>
                 ))}
               </div>
+              <span id={`${spectrumId}-slider-keyboard-help`} className="sr-only">
+                Use arrow keys to adjust this value. Press Tab to move to the next control.
+              </span>
             </div>
           )}
         </div>
@@ -1028,6 +1054,7 @@ function AdjustRow({
 }) {
   const chrome = adjustChrome[kind]
   const sliderSfx = useSliderSfx()
+  const keyboardHintId = `adjust-${label.toLowerCase().replace(/\s+/g, "-")}-keyboard-help`
   const nudge = (next: number) => {
     if (next !== value) playSfx("adjust")
     onChange(next)
@@ -1061,7 +1088,11 @@ function AdjustRow({
           }}
           data-focusable
           aria-label={label}
+          aria-describedby={keyboardHintId}
         />
+        <span id={keyboardHintId} className="sr-only">
+          Use arrow keys to adjust {label.toLowerCase()}. Press Tab to move to the next control.
+        </span>
         <button
           onClick={() => nudge(Math.min(max, value + step))}
           data-focusable
@@ -1230,16 +1261,15 @@ export default function App() {
         return
       }
       if (event.key === "Escape") {
-        if (active?.matches(".preview-canvas-wrap")) {
+        if (
+          active?.matches(".preview-canvas-wrap, input, select, textarea") ||
+          active?.closest(".customize-panel, .adjust-panel, .preview-panel")
+        ) {
           event.preventDefault()
           active.blur()
           document
             .querySelector<HTMLElement>('.category[aria-current="page"]')
             ?.focus()
-          return
-        }
-        if (active?.matches("input, select, textarea")) {
-          active.blur()
           return
         }
         event.preventDefault()
@@ -1257,6 +1287,25 @@ export default function App() {
         return
       if (active?.matches('input[type="range"], input[type="text"], textarea, select'))
         return
+      if (
+        event.key === "ArrowDown" &&
+        active?.matches('.category[aria-current="page"], .customize-panel')
+      ) {
+        const panel = document.querySelector<HTMLElement>(".customize-panel")
+        const selectedChoice = panel?.querySelector<HTMLElement>(
+          ".swatch.active, .feature-choice.selected",
+        )
+        const firstChoice = panel?.querySelector<HTMLElement>(
+          ".swatch, .feature-choice, [data-focusable]:not([disabled])",
+        )
+        const firstControl = selectedChoice ?? firstChoice
+        if (firstControl) {
+          event.preventDefault()
+          firstControl.focus()
+          firstControl.scrollIntoView({ block: "nearest", inline: "nearest" })
+          return
+        }
+      }
       const focusables = Array.from(
         document.querySelectorAll<HTMLElement>(
           "[data-focusable]:not([disabled])",
@@ -1559,6 +1608,9 @@ export default function App() {
 
   return (
     <main className="app-shell">
+      <a className="skip-link" href="#creator-controls">
+        Skip to editor controls
+      </a>
       <header className="topbar">
         <div className="brand">
           <img
@@ -1610,7 +1662,12 @@ export default function App() {
           )}
         </aside>
 
-        <section className="customize-panel" aria-labelledby="section-title">
+        <section
+          id="creator-controls"
+          className="customize-panel"
+          aria-labelledby="section-title"
+          tabIndex={-1}
+        >
           <div className="category-breadcrumb">
             <Icon name={category} size={18} />
             <span>{activeCategory.label}</span>
@@ -1850,7 +1907,11 @@ export default function App() {
                   <kbd>↓</kbd>
                   <kbd>←</kbd>
                   <kbd>→</kbd>
-                  <span>Move focus; turn preview when focused</span>
+                  <span>Choices move · sliders adjust</span>
+                </div>
+                <div>
+                  <kbd className="wide">↓</kbd>
+                  <span>Enter active category</span>
                 </div>
                 <div>
                   <kbd className="wide">Tab</kbd>
@@ -1862,7 +1923,7 @@ export default function App() {
                 </div>
                 <div>
                   <kbd className="wide">Esc</kbd>
-                  <span>Exit preview / back</span>
+                  <span>Leave controls / back</span>
                 </div>
                 <div>
                   <kbd className="wide">⌘Z</kbd>
@@ -1901,7 +1962,7 @@ export default function App() {
         </div>
         <div className="controller-guide">
           <span>
-            <b>Arrows</b> Move focus; turn preview when focused
+            <b>Arrows</b> Browse choices; adjust sliders; turn focused preview
           </span>
           <span>
             <b>Tab</b> Next control
@@ -1910,7 +1971,7 @@ export default function App() {
             <b>Enter</b> Select
           </span>
           <span>
-            <b>Esc</b> Exit preview / back to Face
+            <b>Esc</b> Leave controls / back to Face
           </span>
           <span className="keyboard-guide">Ctrl or ⌘ Z undoes. Shift adds redo. Text fields keep their own undo.</span>
         </div>
