@@ -73,6 +73,13 @@ Replace `YOUR_USERNAME` with the repository owner's GitHub username, or copy the
 
 The 3D FFL preview and feature thumbnails need `AFLResHigh_2_3.dat` at `public/ffl/asset/model/character/mii/AFLResHigh_2_3.dat`. This local resource is not included in the repository. Without it, the app uses an approximate fallback preview and FFL thumbnails are unavailable. See [credits and resource details](CREDITS.md).
 
+
+The FFL head is shown with a simple procedural torso inspired by the Wii Mii Channel; the torso is not an original Wii model.
+
+### Optional background music
+
+The Music button plays and pauses a user-supplied local track. To enable it, place the audio file at `public/ffl/music/mii-channel-editing.mp3`. The `public/ffl/` directory is gitignored, so the track is not included in the repository. Music starts only when the button is pressed.
+
 ## How to use the prototype
 
 1. Open the website using the local URL.
@@ -82,6 +89,16 @@ The 3D FFL preview and feature thumbnails need `AFLResHigh_2_3.dat` at `public/f
 5. Test navigation and editing controls to evaluate the redesigned workflow.
 
 Some features may be prototype-only; verify behavior in the running application before presenting it as implemented.
+
+## Current limits
+
+These are implementation limits, not results from a user test:
+
+- **Save Mii** stores the appearance and profile in this browser on this device. Refresh the page and choose **Restore saved Mii**. Nothing is uploaded, and another browser or device will not have the save.
+- **Keyboard:** arrows move focus, Enter selects, Esc returns to Face, and Ctrl/Cmd+Z and Ctrl/Cmd+Shift+Z undo and redo. Text fields keep normal text undo. Gamepad controls are not implemented.
+- **Colors** are the renderer's preset lists: 6 skin, 8 hair, 6 eye, 5 mouth, and 6 glasses-frame colors. The controls do not mix a custom shade.
+- **3D preview** needs the local Miitomo resource described above. Without it, the page uses the approximate fallback preview.
+- The head is drawn with FFL.js's Wii U shader port, not Nintendo's original Wii renderer.
 
 ## Code structure
 

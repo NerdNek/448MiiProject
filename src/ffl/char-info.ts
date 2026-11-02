@@ -28,8 +28,16 @@ export const charInfoOffset = {
   glassType: 140,
   beardType: 124,
   beardColor: 128,
+  beardScale: 132,
+  beardY: 136,
   beardMustache: 120,
+  glassColor: 144,
+  glassScale: 148,
+  glassY: 152,
   moleType: 156,
+  moleScale: 160,
+  moleX: 164,
+  moleY: 168,
   favoriteColor: 236,
 } as const
 

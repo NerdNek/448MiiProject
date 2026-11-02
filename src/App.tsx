@@ -2,7 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { FeatureThumb } from "./ffl-thumb"
 import { fflCounts, getFflSession } from "./ffl/runtime"
 import type { ThumbPart } from "./ffl/runtime"
-import { eyePalette, facePalette, hairPalette, mouthPalette, type PaletteColor } from "./ffl/palette"
+import { eyePalette, facePalette, glassPalette, hairPalette, mouthPalette, type PaletteColor } from "./ffl/palette"
+import { readSavedMii, writeSavedMii, type StoredMii } from "./mii-storage"
 import { FflPreview } from "./ffl-preview"
 import { maskedSprite } from "./masked-sprite"
 import { MiiWebGLPreview, canUseWebGL } from "./mii-preview-3d"
@@ -33,9 +34,17 @@ type MiiState = {
   mouthSize: number
   mouthColor: number
   glasses: number
+  glassY: number
+  glassSize: number
+  glassColor: number
   facialHair: number
+  mustacheY: number
+  mustacheSize: number
   beardStyle: number
   accessory: number
+  moleX: number
+  moleY: number
+  moleSize: number
   name: string
   month: number
   day: number
@@ -69,9 +78,17 @@ const initialMii: MiiState = {
   mouthSize: 4,
   mouthColor: 0,
   glasses: 0,
+  glassY: 10,
+  glassSize: 4,
+  glassColor: 0,
   facialHair: 0,
+  mustacheY: 10,
+  mustacheSize: 4,
   beardStyle: 0,
   accessory: 0,
+  moleX: 8,
+  moleY: 8,
+  moleSize: 4,
   name: "My Mii",
   month: 6,
   day: 12,
@@ -91,7 +108,6 @@ const categories: { id: CategoryId; label: string; hint: string }[] = [
   { id: "profile", label: "Profile", hint: "Name, birthday, and identity" },
 ]
 
-const skinTones = facePalette.map((entry) => entry.hex)
 const monthNames = [
   "January",
   "February",
@@ -581,6 +597,24 @@ function MiiPreview({ mii }: { mii: MiiState }) {
   )
 }
 
+function BackgroundMusic() {
+  const audioRef = useRef<HTMLAudioElement>(null)
+  const [playing, setPlaying] = useState(false)
+  const [unavailable, setUnavailable] = useState(false)
+  const toggle = async () => {
+    const audio = audioRef.current
+    if (!audio) return
+    if (!audio.paused) { audio.pause(); return }
+    try { audio.volume = 0.25; await audio.play() } catch { setUnavailable(true) }
+  }
+  return <div className="music-control">
+    <audio ref={audioRef} src="/ffl/music/mii-channel-editing.mp3" loop preload="none" onPlay={() => setPlaying(true)} onPause={() => setPlaying(false)} onError={() => setUnavailable(true)} />
+    <button type="button" data-focusable onClick={() => void toggle()} aria-label={playing ? "Pause background music" : "Play background music"} disabled={unavailable}>
+      {unavailable ? "Music unavailable" : playing ? "❚❚ Music" : "▶ Music"}
+    </button>
+  </div>
+}
+
 function LiveMii({ mii }: { mii: MiiState }) {
   const [mode, setMode] = useState<"ffl" | "procedural" | "flat">(() =>
     canUseWebGL() ? "ffl" : "flat",
@@ -663,27 +697,29 @@ function ColorControl({
   palette: PaletteColor[]
   label: string
 }) {
-  const selected = palette[value] ?? palette[0]
+  const index = Math.min(Math.max(value, 0), palette.length - 1)
+  const selected = palette[index]
   return (
     <div className="color-control">
       <div className="control-label-row">
-        <label htmlFor={`${label}-hue`}>{label}</label>
+        <label htmlFor={`${label}-palette`}>{label}</label>
         <output>
-          {selected.name} · {selected.hue}°
+          {selected.name} · {index + 1} of {palette.length}
         </output>
       </div>
       <div className="hue-wrap">
         <input
-          id={`${label}-hue`}
-          className="hue-slider"
+          id={`${label}-palette`}
+          className="palette-slider"
           type="range"
           min="0"
           max={palette.length - 1}
           step="1"
-          value={Math.min(value, palette.length - 1)}
+          value={index}
           onChange={(e) => onChange(Number(e.target.value))}
           data-focusable
-          aria-label={`${label} hue`}
+          aria-label={`${label} palette`}
+          aria-valuetext={`${selected.name}, ${index + 1} of ${palette.length}`}
           style={{
             background: `linear-gradient(90deg, ${palette.map((entry) => entry.hex).join(", ")})`,
           }}
@@ -692,24 +728,25 @@ function ColorControl({
           className="hue-thumb-preview"
           style={{
             background: selected.hex,
-            left: `${(Math.min(value, palette.length - 1) / Math.max(1, palette.length - 1)) * 100}%`,
+            left: `${(index / Math.max(1, palette.length - 1)) * 100}%`,
           }}
         />
       </div>
-      <div className="swatch-row" aria-label={`${label} presets`}>
-        {palette.map((entry, index) => (
+      <div className="swatch-row" aria-label={`${label} choices`}>
+        {palette.map((entry, entryIndex) => (
           <button
             key={entry.hex}
-            className={index === value ? "swatch active" : "swatch"}
+            className={entryIndex === index ? "swatch active" : "swatch"}
             style={{ background: entry.hex }}
-            onClick={() => onChange(index)}
+            onClick={() => onChange(entryIndex)}
             data-focusable
-            aria-label={`Set ${label} to ${entry.name}, hue ${entry.hue} degrees`}
+            aria-label={`${label} ${entry.name}, ${entryIndex + 1} of ${palette.length}`}
+            aria-pressed={entryIndex === index}
           />
         ))}
       </div>
       <p className="microcopy">
-        {label} uses the {palette.length} colors this renderer supports. Each step changes the preview.
+        {palette.length} preset colors. The slider and swatches choose one of them. They do not mix a custom shade.
       </p>
     </div>
   )
@@ -790,14 +827,28 @@ export default function App() {
     return () => { active = false }
   }, [])
   const [toast, setToast] = useState("")
+  const [toastOk, setToastOk] = useState(true)
   const toastTimer = useRef<number | undefined>(undefined)
+  const [storedMii, setStoredMii] = useState<StoredMii | null>(null)
+  const [storageError, setStorageError] = useState("")
   const mii = history.present
 
-  const notify = useCallback((message: string) => {
+  const notify = useCallback((message: string, ok = true) => {
     window.clearTimeout(toastTimer.current)
+    setToastOk(ok)
     setToast(message)
-    toastTimer.current = window.setTimeout(() => setToast(""), 2200)
+    toastTimer.current = window.setTimeout(() => setToast(""), 3200)
   }, [])
+
+  useEffect(() => {
+    const saved = readSavedMii()
+    if (saved.status === "ok") setStoredMii(saved.mii)
+    else if (saved.status === "invalid") {
+      setStorageError("A saved Mii was found in this browser, but it could not be read. Nothing was restored.")
+    } else if (saved.status === "unavailable") {
+      setStorageError("This browser is not allowing saved Miis. Changes stay in this tab only.")
+    }
+  }, [notify])
 
   const updateMii = useCallback(
     (changes: Partial<MiiState>, feedback?: string) => {
@@ -829,6 +880,36 @@ export default function App() {
     if (history.past.length) notify("Last change undone")
   }, [history.past.length, notify])
 
+  const replaceMii = useCallback((next: MiiState, feedback?: string) => {
+    setHistory((current) => {
+      if (JSON.stringify(next) === JSON.stringify(current.present)) return current
+      return {
+        past: [...current.past, current.present].slice(-40),
+        present: next,
+        future: [],
+      }
+    })
+    if (feedback) notify(feedback)
+  }, [notify])
+
+  const saveMii = useCallback(() => {
+    const result = writeSavedMii(mii)
+    if (result.ok) {
+      setStoredMii(mii)
+      notify(`${mii.name || "Unnamed Mii"} was saved in this browser.`)
+    } else {
+      notify(result.reason, false)
+    }
+  }, [mii, notify])
+
+  const restoreSaved = useCallback(() => {
+    if (!storedMii) {
+      notify("No saved Mii is available in this browser.", false)
+      return
+    }
+    replaceMii(storedMii, `Restored ${storedMii.name || "the saved Mii"} from this browser.`)
+  }, [replaceMii, storedMii, notify])
+
   const redo = useCallback(() => {
     setHistory((current) => {
       if (!current.future.length) return current
@@ -844,12 +925,25 @@ export default function App() {
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
-      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "z") {
+      const active = document.activeElement as HTMLElement | null
+      const editingText = Boolean(active?.matches('input[type="text"], textarea'))
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "z" && !event.altKey) {
+        if (editingText) return
         event.preventDefault()
         event.shiftKey ? redo() : undo()
         return
       }
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "y" && !event.altKey) {
+        if (editingText) return
+        event.preventDefault()
+        redo()
+        return
+      }
       if (event.key === "Escape") {
+        if (active?.matches("input, select, textarea")) {
+          active.blur()
+          return
+        }
         event.preventDefault()
         setCategory("face")
         notify("Back to Face")
@@ -859,14 +953,16 @@ export default function App() {
         !["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(event.key)
       )
         return
-      const active = document.activeElement as HTMLElement | null
-      if (active?.matches('input[type="range"], input[type="text"], select'))
+      if (active?.matches('input[type="range"], input[type="text"], textarea, select'))
         return
       const focusables = Array.from(
         document.querySelectorAll<HTMLElement>(
           "[data-focusable]:not([disabled])",
         ),
-      )
+      ).filter((item) => {
+        const rect = item.getBoundingClientRect()
+        return rect.width > 0 && rect.height > 0
+      })
       if (!focusables.length) return
       if (!active || !focusables.includes(active)) {
         focusables[0].focus()
@@ -905,6 +1001,7 @@ export default function App() {
       if (candidates[0]) {
         event.preventDefault()
         candidates[0].item.focus()
+        candidates[0].item.scrollIntoView({ block: "nearest", inline: "nearest" })
       }
     }
     window.addEventListener("keydown", onKeyDown)
@@ -940,25 +1037,29 @@ export default function App() {
               part="face"
             />
             <div className="subsection">
-              <h3>Skin tone</h3>
+              <h3>Skin color</h3>
               <div className="large-swatches">
-                {skinTones.map((tone) => (
+                {facePalette.map((entry, index) => (
                   <button
-                    key={tone}
+                    key={entry.hex}
                     className={
-                      mii.skinTone === tone
+                      mii.skinTone.toLowerCase() === entry.hex.toLowerCase()
                         ? "skin-swatch active"
                         : "skin-swatch"
                     }
-                    style={{ background: tone }}
-                    onClick={() => updateMii({ skinTone: tone })}
+                    style={{ background: entry.hex }}
+                    onClick={() => updateMii({ skinTone: entry.hex })}
                     data-focusable
-                    aria-label={`Select skin tone ${tone}`}
+                    aria-label={`Skin color ${entry.name}, ${index + 1} of ${facePalette.length}`}
+                    aria-pressed={mii.skinTone.toLowerCase() === entry.hex.toLowerCase()}
                   >
-                    {mii.skinTone === tone && <Icon name="check" size={17} />}
+                    {mii.skinTone.toLowerCase() === entry.hex.toLowerCase() && <Icon name="check" size={17} />}
                   </button>
                 ))}
               </div>
+              <p className="microcopy">
+                Six preset skin colors. Choosing one changes the rendered face. A custom shade is not available.
+              </p>
             </div>
           </>
         )
@@ -1108,7 +1209,9 @@ export default function App() {
               type="beard"
               part="beard"
             />
-            <Tip>The first option in each row is none. Facial hair uses the hair color.</Tip>
+            <Tip>
+              The first option in each row is none. Color follows the hair color. Position and size on the right move the moustache only; the beard shape has no separate position.
+            </Tip>
           </>
         )
       case "accessories":
@@ -1116,7 +1219,7 @@ export default function App() {
           <>
             <SectionHeader
               title="Add a beauty mark"
-              subtitle="The resource includes a mole. Other extras are not in this renderer."
+              subtitle="Turn the mole on, then move and resize it on the right. Other extras are not in this renderer."
             />
             <ChoiceGrid
               count={fflCounts.mole}
@@ -1226,6 +1329,7 @@ export default function App() {
           <div className="panel-kicker">
             <span className="live-dot" />
             Live preview
+            <BackgroundMusic />
           </div>
           <div className="preview-stage">
             <div className="preview-halo" />
@@ -1235,6 +1339,18 @@ export default function App() {
             <strong>{mii.name || "Unnamed Mii"}</strong>
             <span>FFL preview · Wii U shader port</span>
           </div>
+          <p className="save-note">Save Mii keeps appearance and profile in this browser on this device. It is not uploaded.</p>
+          {storageError && <p className="save-note storage-error">{storageError}</p>}
+          {storedMii && (
+            <div className="saved-banner">
+              <p>
+                Saved in this browser: <strong>{storedMii.name || "Unnamed Mii"}</strong>
+              </p>
+              <button type="button" onClick={restoreSaved} data-focusable>
+                Restore saved Mii
+              </button>
+            </div>
+          )}
         </aside>
 
         <section className="customize-panel" aria-labelledby="section-title">
@@ -1324,6 +1440,50 @@ export default function App() {
               >
                 Reset eye adjustments
               </button>
+            </>
+          ) : category === "glasses" ? (
+            <>
+              <div className="adjust-title"><div><span className="eyebrow">Fine tune</span><h2>Glasses adjustments</h2></div><span className="context-icon"><Icon name="glasses" /></span></div>
+              {mii.glasses === 0 ? (
+                <p className="adjust-intro">Choose a glasses style first. Position, size, and frame color apply to that style.</p>
+              ) : fflRanges ? (
+                <>
+                  <p className="adjust-intro">These steps move and resize the selected glasses.</p>
+                  <AdjustRow label="Vertical position" value={mii.glassY} {...fflRanges.glasses.y} step={1} leftIcon="down" rightIcon="up" onChange={(glassY) => updateMii({ glassY })} />
+                  <AdjustRow label="Size" value={mii.glassSize} {...fflRanges.glasses.scale} step={1} leftIcon="minus" rightIcon="plus" onChange={(glassSize) => updateMii({ glassSize })} />
+                  <ColorControl value={mii.glassColor} onChange={(glassColor) => updateMii({ glassColor })} palette={glassPalette} label="Frame color" />
+                  <button className="reset-button" onClick={() => updateMii({ glassY: 10, glassSize: 4, glassColor: 0 }, "Glasses adjustments reset")} data-focusable>Reset glasses adjustments</button>
+                </>
+              ) : <p className="adjust-intro">Glasses adjustments require the FFL preview.</p>}
+            </>
+          ) : category === "facialHair" ? (
+            <>
+              <div className="adjust-title"><div><span className="eyebrow">Fine tune</span><h2>Moustache adjustments</h2></div><span className="context-icon"><Icon name="facialHair" /></span></div>
+              {mii.facialHair === 0 ? (
+                <p className="adjust-intro">Choose a moustache to change its position and size. Beard shapes do not have a separate position control.</p>
+              ) : fflRanges ? (
+                <>
+                  <p className="adjust-intro">These steps move the moustache. Beard color still follows the hair color.</p>
+                  <AdjustRow label="Vertical position" value={mii.mustacheY} {...fflRanges.mustache.y} step={1} leftIcon="down" rightIcon="up" onChange={(mustacheY) => updateMii({ mustacheY })} />
+                  <AdjustRow label="Size" value={mii.mustacheSize} {...fflRanges.mustache.scale} step={1} leftIcon="minus" rightIcon="plus" onChange={(mustacheSize) => updateMii({ mustacheSize })} />
+                  <button className="reset-button" onClick={() => updateMii({ mustacheY: 10, mustacheSize: 4 }, "Moustache adjustments reset")} data-focusable>Reset moustache adjustments</button>
+                </>
+              ) : <p className="adjust-intro">Moustache adjustments require the FFL preview.</p>}
+            </>
+          ) : category === "accessories" ? (
+            <>
+              <div className="adjust-title"><div><span className="eyebrow">Fine tune</span><h2>Mole adjustments</h2></div><span className="context-icon"><Icon name="accessories" /></span></div>
+              {mii.accessory === 0 ? (
+                <p className="adjust-intro">Turn the beauty mark on to move and resize it.</p>
+              ) : fflRanges ? (
+                <>
+                  <p className="adjust-intro">These steps place the mole on the face.</p>
+                  <AdjustRow label="Vertical position" value={mii.moleY} {...fflRanges.mole.y} step={1} leftIcon="down" rightIcon="up" onChange={(moleY) => updateMii({ moleY })} />
+                  <AdjustRow label="Horizontal position" value={mii.moleX} {...fflRanges.mole.x} step={1} leftIcon="left" rightIcon="right" onChange={(moleX) => updateMii({ moleX })} />
+                  <AdjustRow label="Size" value={mii.moleSize} {...fflRanges.mole.scale} step={1} leftIcon="minus" rightIcon="plus" onChange={(moleSize) => updateMii({ moleSize })} />
+                  <button className="reset-button" onClick={() => updateMii({ moleX: 8, moleY: 8, moleSize: 4 }, "Mole adjustments reset")} data-focusable>Reset mole adjustments</button>
+                </>
+              ) : <p className="adjust-intro">Mole adjustments require the FFL preview.</p>}
             </>
           ) : category === "nose" ? (
             <>
@@ -1417,7 +1577,7 @@ export default function App() {
                 </div>
                 <p>This never limits which features you can use.</p>
               </div>
-              <Tip>Your profile details are private to this prototype.</Tip>
+              <Tip>Profile details stay in this browser. Save Mii stores them with the appearance on this device only.</Tip>
             </>
           ) : (
             <>
@@ -1441,7 +1601,7 @@ export default function App() {
                 </div>
               </div>
               <div className="navigation-help">
-                <h3>Button navigation</h3>
+                <h3>Keyboard</h3>
                 <div>
                   <kbd>↑</kbd>
                   <kbd>↓</kbd>
@@ -1473,30 +1633,31 @@ export default function App() {
           >
             <Icon name="undo" size={20} />
             <span>Undo</span>
-            <kbd>−</kbd>
+            <kbd>Ctrl Z</kbd>
           </button>
           <button
             onClick={redo}
             disabled={!history.future.length}
             data-focusable
             aria-label="Redo last change"
+            aria-keyshortcuts="Control+Shift+Z Control+Y"
           >
             <Icon name="redo" size={20} />
             <span>Redo</span>
-            <kbd>+</kbd>
+            <kbd>Ctrl Shift Z</kbd>
           </button>
         </div>
         <div className="controller-guide">
           <span>
-            <b className="dpad">✣</b> Move
+            <b>Arrows</b> Move focus
           </span>
           <span>
-            <b className="button-a">A</b> Select
+            <b>Enter</b> Select
           </span>
           <span>
-            <b className="button-b">B</b> Back
+            <b>Esc</b> Back to Face
           </span>
-          <span className="keyboard-guide">Keyboard: arrows · Enter · Esc</span>
+          <span className="keyboard-guide">Ctrl or ⌘ Z undoes. Shift adds redo. Text fields keep their own undo.</span>
         </div>
         <div className="primary-actions">
           <button
@@ -1508,7 +1669,7 @@ export default function App() {
           </button>
           <button
             className="save-button"
-            onClick={() => notify(`${mii.name || "Your Mii"} was saved`)}
+            onClick={saveMii}
             data-focusable
           >
             <Icon name="save" size={20} /> Save Mii
@@ -1517,7 +1678,7 @@ export default function App() {
       </footer>
 
       <div
-        className={toast ? "toast visible" : "toast"}
+        className={toast ? `toast visible ${toastOk ? "" : "toast-error"}` : "toast"}
         role="status"
         aria-live="polite"
       >

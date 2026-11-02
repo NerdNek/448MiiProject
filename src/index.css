@@ -44,8 +44,15 @@ button {
 button:focus-visible,
 input:focus-visible,
 select:focus-visible {
-  outline: 4px solid rgba(0, 185, 214, 0.3);
+  outline: 3px solid #007f98;
   outline-offset: 2px;
+}
+
+.feature-choice:focus-visible,
+.category:focus-visible,
+.skin-swatch:focus-visible,
+.swatch:focus-visible {
+  outline-offset: -3px;
 }
 
 .app-shell {
@@ -654,6 +661,7 @@ select:focus-visible {
   margin: 0 8px 12px;
 }
 
+.palette-slider,
 .hue-slider {
   position: absolute;
   inset: 0;
@@ -668,6 +676,7 @@ select:focus-visible {
   box-shadow: inset 0 1px 3px rgba(42, 62, 65, 0.25);
 }
 
+.palette-slider::-webkit-slider-thumb,
 .hue-slider::-webkit-slider-thumb {
   width: 29px;
   height: 29px;
@@ -678,6 +687,7 @@ select:focus-visible {
   box-shadow: 0 0 0 2px #50676a, 0 3px 7px rgba(0, 0, 0, 0.25);
 }
 
+.palette-slider::-moz-range-thumb,
 .hue-slider::-moz-range-thumb {
   width: 22px;
   height: 22px;
@@ -1278,6 +1288,48 @@ kbd.wide {
   background: #26b978;
 }
 
+.toast-error {
+  background: #6d2e32;
+}
+
+.toast-error > span {
+  background: #c4474e;
+}
+
+.save-note,
+.saved-banner p {
+  margin: 8px 0 0;
+  color: #5d7276;
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.storage-error {
+  color: #8a3034;
+}
+
+.saved-banner {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 8px;
+}
+
+.saved-banner button {
+  border: 1px solid #8fd3de;
+  border-radius: 999px;
+  background: #fff;
+  color: #145863;
+  font-size: 12px;
+  font-weight: 800;
+  padding: 7px 12px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
 @media (max-width: 1450px) {
   .app-shell { grid-template-rows: 106px minmax(0, 1fr) 74px; }
   .topbar { grid-template-columns: 205px 1fr; padding: 11px 20px 9px; gap: 16px; }
@@ -1562,3 +1614,8 @@ body {
   font-weight: 800;
   white-space: nowrap;
 }
+
+.music-control { margin-left: auto; }
+.music-control button { border: 1px solid #b5cacc; border-radius: 999px; background: #fff; color: #315b62; padding: 6px 11px; font: inherit; font-size: 11px; cursor: pointer; white-space: nowrap; }
+.music-control button:focus-visible { outline: 3px solid #00a7ca; outline-offset: 2px; }
+.music-control button:disabled { opacity: .6; cursor: default; }

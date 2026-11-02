@@ -36,6 +36,7 @@ export function FflPreview({
     let built = ""
     let syncing = false
     const pivot = new THREE.Group()
+    let body: THREE.Group | null = null
     const scene = new THREE.Scene()
     scene.add(pivot)
     const camera = frontCamera()
@@ -125,6 +126,36 @@ export function FflPreview({
           return
         }
         pivot.add(model.meshes)
+        if (body) {
+          pivot.remove(body)
+          const materials = new Set<THREE.Material>()
+          body.traverse((child) => {
+            if (child instanceof THREE.Mesh) {
+              child.geometry.dispose()
+              materials.add(child.material as THREE.Material)
+            }
+          })
+          materials.forEach((material) => material.dispose())
+        }
+        const bounds = new THREE.Box3().setFromObject(model.meshes)
+        const size = bounds.getSize(new THREE.Vector3())
+        const center = bounds.getCenter(new THREE.Vector3())
+        body = new THREE.Group()
+        const skin = new THREE.MeshBasicMaterial({ color: miiRef.current.skinTone })
+        const shirt = new THREE.MeshBasicMaterial({ color: "#29b8d4" })
+        const neck = new THREE.Mesh(new THREE.CylinderGeometry(size.x * .10, size.x * .13, size.y * .15, 24), skin)
+        neck.position.set(center.x, bounds.min.y - size.y * .025, center.z - size.z * .15)
+        body.add(neck)
+        const torso = new THREE.Mesh(new THREE.SphereGeometry(1, 32, 24), shirt)
+        torso.scale.set(size.x * .48, size.y * .27, size.z * .38)
+        torso.position.set(center.x, bounds.min.y - size.y * .23, center.z - size.z * .15)
+        body.add(torso)
+        body.position.y = size.y * .22
+        pivot.add(body)
+        camera.fov = 13.8
+        camera.position.y = center.y - size.y * .16
+        camera.lookAt(center.x, camera.position.y, 0)
+        camera.updateProjectionMatrix()
         built = latest
       } catch (error) {
         if (!disposed) {
@@ -172,6 +203,16 @@ export function FflPreview({
       host.removeEventListener("pointercancel", endDrag)
       host.removeEventListener("dblclick", reset)
       if (model) model.dispose()
+      if (body) {
+        const materials = new Set<THREE.Material>()
+        body.traverse((child) => {
+          if (child instanceof THREE.Mesh) {
+            child.geometry.dispose()
+            materials.add(child.material as THREE.Material)
+          }
+        })
+        materials.forEach((material) => material.dispose())
+      }
       renderer.dispose()
       renderer.domElement.remove()
     }
@@ -225,8 +266,16 @@ function appearanceKey(mii: FflMii) {
     mii.mouthSize,
     mii.mouthColor,
     mii.glasses,
+    mii.glassY,
+    mii.glassSize,
+    mii.glassColor,
     mii.facialHair,
+    mii.mustacheY,
+    mii.mustacheSize,
     mii.beardStyle,
     mii.accessory,
+    mii.moleX,
+    mii.moleY,
+    mii.moleSize,
   ].join("|")
 }

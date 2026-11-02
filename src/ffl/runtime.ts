@@ -56,9 +56,17 @@ export type FflMii = {
   mouthStyle: number
   mouthColor: number
   glasses: number
+  glassY: number
+  glassSize: number
+  glassColor: number
   facialHair: number
+  mustacheY: number
+  mustacheSize: number
   beardStyle: number
   accessory: number
+  moleX: number
+  moleY: number
+  moleSize: number
   name: string
 }
 
@@ -89,6 +97,9 @@ type Session = {
   brows: { scale: Span; rotate: Span; x: Span; y: Span }
   nose: { scale: Span; y: Span }
   mouth: { scale: Span; y: Span }
+  glasses: { scale: Span; y: Span }
+  mustache: { scale: Span; y: Span }
+  mole: { scale: Span; x: Span; y: Span }
 }
 
 const RESOURCE_URL = "/ffl/asset/model/character/mii/AFLResHigh_2_3.dat"
@@ -134,8 +145,16 @@ export function miiToCharInfo(session: Session, mii: FflMii) {
     beardMustache: clamp(mii.facialHair, fflCounts.mustache),
     beardType: clamp(mii.beardStyle, fflCounts.beard),
     beardColor: clamp(mii.hairHue, 8),
+    beardScale: clampRange(mii.mustacheSize, session.mustache.scale),
+    beardY: clampRange(mii.mustacheY, session.mustache.y),
     glassType: clamp(mii.glasses, fflCounts.glass),
+    glassColor: clamp(mii.glassColor, 6),
+    glassScale: clampRange(mii.glassSize, session.glasses.scale),
+    glassY: clampRange(mii.glassY, session.glasses.y),
     moleType: mii.accessory > 0 ? 1 : 0,
+    moleScale: clampRange(mii.moleSize, session.mole.scale),
+    moleX: clampRange(mii.moleX, session.mole.x),
+    moleY: clampRange(mii.moleY, session.mole.y),
   })
 }
 
@@ -258,6 +277,13 @@ async function loadSession(): Promise<Session> {
     base: neutral,
     nose: { scale: fieldSpan(module, neutral, "noseScale"), y: fieldSpan(module, neutral, "noseY") },
     mouth: { scale: fieldSpan(module, neutral, "mouthScale"), y: fieldSpan(module, neutral, "mouthY") },
+    glasses: { scale: fieldSpan(module, neutral, "glassScale"), y: fieldSpan(module, neutral, "glassY") },
+    mustache: { scale: fieldSpan(module, neutral, "beardScale"), y: fieldSpan(module, neutral, "beardY") },
+    mole: {
+      scale: fieldSpan(module, neutral, "moleScale"),
+      x: fieldSpan(module, neutral, "moleX"),
+      y: fieldSpan(module, neutral, "moleY"),
+    },
     brows: {
       scale: fieldSpan(module, neutral, "eyebrowScale"),
       rotate: fieldSpan(module, neutral, "eyebrowRotate"),
@@ -373,9 +399,17 @@ function neutralMii(): FflMii {
     mouthStyle: 22,
     mouthColor: 0,
     glasses: 0,
+    glassY: 10,
+    glassSize: 4,
+    glassColor: 0,
     facialHair: 0,
+    mustacheY: 10,
+    mustacheSize: 4,
     beardStyle: 0,
     accessory: 0,
+    moleX: 8,
+    moleY: 8,
+    moleSize: 4,
     name: "",
   }
 }

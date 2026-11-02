@@ -62,6 +62,16 @@ export const eyePalette: PaletteColor[] = [
   color(0.22, 0.439, 0.345, "Green"),
 ]
 
+/** Six frame colors from the same FFL table. */
+export const glassPalette: PaletteColor[] = [
+  color(0.094, 0.094, 0.094, "Black"),
+  color(0.376, 0.219, 0.062, "Brown"),
+  color(0.658, 0.062, 0.031, "Red"),
+  color(0.125, 0.188, 0.407, "Blue"),
+  color(0.658, 0.376, 0, "Gold"),
+  color(0.47, 0.439, 0.407, "Gray"),
+]
+
 export const mouthPalette: PaletteColor[] = [
   color(0.847, 0.322, 0.031, "Orange"),
   color(0.941, 0.047, 0.031, "Red"),
