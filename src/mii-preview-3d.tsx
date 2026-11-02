@@ -678,6 +678,7 @@ export function MiiWebGLPreview({
   const lookRef = useRef(mii)
   const revisionRef = useRef(0)
   const resetRef = useRef<() => void>(() => {})
+  const rotateRef = useRef<(key: string) => void>(() => {})
   const previousLook = useRef(mii)
   lookRef.current = mii
   if (previousLook.current !== mii) {
@@ -785,6 +786,15 @@ export function MiiWebGLPreview({
       resetting = true
     }
     resetRef.current = reset
+    rotateRef.current = (key) => {
+      resetting = false
+      velYaw = 0
+      velPitch = 0
+      if (key === "ArrowLeft") yaw -= 0.18
+      else if (key === "ArrowRight") yaw += 0.18
+      else if (key === "ArrowUp") pitch = THREE.MathUtils.clamp(pitch - 0.1, -0.38, 0.62)
+      else if (key === "ArrowDown") pitch = THREE.MathUtils.clamp(pitch + 0.1, -0.38, 0.62)
+    }
 
     const onPointerDown = (event: PointerEvent) => {
       if (event.button !== 0) return
@@ -885,6 +895,7 @@ export function MiiWebGLPreview({
     return () => {
       cancelled = true
       resetRef.current = () => {}
+      rotateRef.current = () => {}
       renderer.setAnimationLoop(null)
       observer.disconnect()
       host.removeEventListener("pointerdown", onPointerDown)
@@ -908,11 +919,23 @@ export function MiiWebGLPreview({
       <div
         ref={mountRef}
         className="preview-canvas-wrap"
-        role="img"
-        aria-label={`3D preview of ${mii.name || "Unnamed Mii"}. Drag to turn.`}
+        role="group"
+        tabIndex={0}
+        data-focusable
+        aria-label={`3D preview of ${mii.name || "Unnamed Mii"}. Use arrow keys to turn; Home returns to the front view.`}
+        aria-keyshortcuts="ArrowLeft ArrowRight ArrowUp ArrowDown Home"
+        onKeyDown={(event) => {
+          if (["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(event.key)) {
+            event.preventDefault()
+            rotateRef.current(event.key)
+          } else if (event.key === "Home") {
+            event.preventDefault()
+            resetRef.current()
+          }
+        }}
       />
       <div className="preview-orbit">
-        <span>Drag to turn</span>
+        <span>Drag or use arrow keys to turn</span>
         <button
           type="button"
           data-focusable

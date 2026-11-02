@@ -1214,6 +1214,7 @@ export default function App() {
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
+      if (event.defaultPrevented) return
       const active = document.activeElement as HTMLElement | null
       const editingText = Boolean(active?.matches('input[type="text"], textarea'))
       if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "z" && !event.altKey) {
@@ -1838,7 +1839,7 @@ export default function App() {
                   <kbd>↓</kbd>
                   <kbd>←</kbd>
                   <kbd>→</kbd>
-                  <span>Move focus</span>
+                  <span>Move focus; turn preview when focused</span>
                 </div>
                 <div>
                   <kbd className="wide">Enter</kbd>
@@ -1885,7 +1886,7 @@ export default function App() {
         </div>
         <div className="controller-guide">
           <span>
-            <b>Arrows</b> Move focus
+            <b>Arrows</b> Move focus; turn preview when focused
           </span>
           <span>
             <b>Enter</b> Select
