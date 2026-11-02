@@ -1495,6 +1495,11 @@ kbd.wide {
   cursor: grabbing;
 }
 
+.preview-canvas-wrap:focus-visible {
+  outline: 3px solid #007f98;
+  outline-offset: -4px;
+}
+
 .mii-gl {
   display: block;
   width: 100%;
