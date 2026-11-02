@@ -2,6 +2,8 @@
 export const charInfoOffset = {
   faceType: 4,
   faceColor: 8,
+  faceTex: 12,
+  faceMake: 16,
   hairType: 20,
   hairColor: 24,
   eyeType: 32,

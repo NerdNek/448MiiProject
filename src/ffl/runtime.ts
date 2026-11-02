@@ -2,6 +2,7 @@ import {
   CharModel,
   FFL,
   FFLCharModelDescDefault,
+  FFLModelFlag,
   getRandomCharInfo,
 } from "ffl.js"
 import ModuleFFL from "ffl.js/ffl-emscripten.cjs"
@@ -9,7 +10,7 @@ import FFLShaderMaterial from "ffl.js/materials/FFLShaderMaterial.js"
 import * as THREE from "three"
 import wasmUrl from "../../node_modules/ffl.js/ffl-emscripten.wasm?url"
 import { charInfoOffset, patchCharInfo, type CharInfoField } from "./char-info"
-import { facePalette, paletteIndex } from "./palette"
+import { eyePalette, facePalette, hairPalette, gradientColor } from "./palette"
 
 /**
  * Counts verified against this project's FFL.js WASM and AFLResHigh_2_3.dat.
@@ -116,7 +117,11 @@ export function getFflSession() {
 }
 
 export function miiToCharInfo(session: Session, mii: FflMii) {
-  const skin = paletteIndex(facePalette, mii.skinTone)
+  const rgb = new THREE.Color(mii.skinTone)
+  const skin = facePalette.reduce((best, entry, i) => {
+    const dist = (hex: string) => { const c = new THREE.Color(hex); return (c.r-rgb.r)**2 + (c.g-rgb.g)**2 + (c.b-rgb.b)**2 }
+    return dist(entry.hex) < dist(facePalette[best].hex) ? i : best
+  }, 0)
   return patchCharInfo(session.base, {
     faceType: clamp(mii.faceShape, fflCounts.faceType),
     faceColor: clamp(skin, facePalette.length),
@@ -188,15 +193,63 @@ export function createCharModel(
   session: Session,
   data: Uint8Array,
   renderer: THREE.WebGLRenderer,
+  customEye?: number,
 ) {
-  return new CharModel(
+  const model = new CharModel(
     session.ffl,
     data,
-    FFLCharModelDescDefault,
+    { ...FFLCharModelDescDefault, modelFlag: FFLModelFlag.NORMAL | FFLModelFlag.FLATTEN_NOSE },
     FFLShaderMaterial,
-    renderer,
+    undefined,
     true,
   )
+  // The eye color is composited into the face mask. Override only the blue
+  // (iris) channel while FFL builds that texture; leave whites and outlines intact.
+  if (customEye !== undefined && !Number.isInteger(customEye)) {
+    const hex = gradientColor(eyePalette, customEye)
+    const iris = new THREE.Color().setRGB(
+      parseInt(hex.slice(1, 3), 16) / 255,
+      parseInt(hex.slice(3, 5), 16) / 255,
+      parseInt(hex.slice(5, 7), 16) / 255,
+    )
+    class EyeTextureMaterial extends FFLShaderMaterial {
+      constructor(parameters?: THREE.ShaderMaterialParameters) {
+        super(parameters)
+        const opts = parameters as (THREE.ShaderMaterialParameters & { modulateType?: number }) | undefined
+        if (opts?.modulateType === 12) {
+          ;(this as unknown as { colorB: THREE.Color }).colorB = iris.clone()
+        }
+      }
+    }
+    model.initTextures(renderer, EyeTextureMaterial)
+  } else {
+    model.initTextures(renderer)
+  }
+  // FFL's nose and nose outline are separate meshes. Reduce their depth
+  // together, anchored at the attachment point, to keep the outline aligned.
+  const noseMeshes = model.meshes.children.filter((object): object is THREE.Mesh =>
+    object instanceof THREE.Mesh && [2, 7].includes(object.geometry.userData.modulateType),
+  )
+  const nose = noseMeshes.find((mesh) => mesh.geometry.userData.modulateType === 2)
+  if (nose) {
+    nose.geometry.computeBoundingBox()
+    // The nose meshes are centered at their attachment point; the bounding
+    // box extends well inside the face, so its minimum is not the surface.
+    const baseZ = 0
+    if (baseZ !== undefined) {
+      for (const mesh of noseMeshes) {
+        const positions = mesh.geometry.getAttribute("position")
+        if (!positions) continue
+        for (let i = 0; i < positions.count; i += 1) {
+          positions.setZ(i, baseZ + (positions.getZ(i) - baseZ) * 0.7)
+        }
+        positions.needsUpdate = true
+        mesh.geometry.computeBoundingSphere()
+        mesh.geometry.computeBoundingBox()
+      }
+    }
+  }
+  return model
 }
 
 export function frontCamera() {
@@ -209,7 +262,7 @@ function thumbCamera(part: ThumbPart) {
   const framing: Record<ThumbPart, { y: number; fov: number; z: number }> = {
     face: { y: 33, fov: 11, z: 640 },
     hair: { y: 42, fov: 13, z: 680 },
-    brows: { y: 54, fov: 5.5, z: 480 },
+    brows: { y: 43, fov: 5.4, z: 470 },
     eyes: { y: 46, fov: 5.2, z: 460 },
     nose: { y: 30, fov: 4.6, z: 440 },
     mouth: { y: 16, fov: 5.4, z: 460 },
@@ -247,6 +300,8 @@ async function loadSession(): Promise<Session> {
   const neutral = patchCharInfo(getRandomCharInfo(ffl), {
     faceType: 0,
     faceColor: 1,
+    faceTex: 0,
+    faceMake: 0,
     hairType: 33,
     hairColor: 1,
     eyeType: 0,
@@ -258,6 +313,8 @@ async function loadSession(): Promise<Session> {
     eyeY: 12,
     eyebrowType: 6,
     eyebrowColor: 1,
+    // Not exposed in the UI; left unset it inherits a random aspect each session.
+    eyebrowAspect: 3,
     noseType: 0,
     noseScale: 4,
     noseY: 9,
@@ -338,10 +395,16 @@ async function drawThumb(part: ThumbPart, index: number) {
   const mii = neutralMii()
   if (part === "face") mii.faceShape = index
   if (part === "hair") mii.hairStyle = index
-  if (part === "brows") mii.eyebrowStyle = index
+  if (part === "brows") {
+    mii.eyebrowStyle = index
+    mii.eyebrowSize = 6
+    mii.eyebrowY = 9
+  }
   if (part === "eyes") {
+    mii.hairStyle = 32
     mii.eyeStyle = index
     mii.eyeSize = 6
+    mii.eyebrowStyle = 0
   }
   if (part === "nose") mii.noseStyle = index
   if (part === "mouth") {
@@ -353,6 +416,14 @@ async function drawThumb(part: ThumbPart, index: number) {
   if (part === "beard") mii.beardStyle = index
   if (part === "mole") mii.accessory = index
   const model = createCharModel(session, miiToCharInfo(session, mii), renderer)
+  if (part === "brows") {
+    // Every hairstyle's bangs overlap some brow shapes; hide hair (4) and cap (5) meshes.
+    for (const object of model.meshes.children) {
+      if (object instanceof THREE.Mesh && [4, 5].includes(object.geometry.userData.modulateType)) {
+        object.visible = false
+      }
+    }
+  }
   const scene = new THREE.Scene()
   scene.add(model.meshes)
   renderer.render(scene, thumbCamera(part))
@@ -381,10 +452,10 @@ function neutralMii(): FflMii {
     hairStyle: 33,
     hairHue: 1,
     eyebrowStyle: 6,
-    eyebrowY: 12,
-    eyebrowX: 4,
-    eyebrowSize: 4,
-    eyebrowRotation: 4,
+    eyebrowY: 10,
+    eyebrowX: 3,
+    eyebrowSize: 3,
+    eyebrowRotation: 5,
     eyeStyle: 0,
     eyeHue: 0,
     eyeY: 12,
@@ -411,5 +482,33 @@ function neutralMii(): FflMii {
     moleY: 8,
     moleSize: 4,
     name: "",
+  }
+}
+
+export function applyCustomColors(model: CharModel, mii: FflMii) {
+  const rawColor = (hex: string) => new THREE.Color().setRGB(
+    parseInt(hex.slice(1, 3), 16) / 255,
+    parseInt(hex.slice(3, 5), 16) / 255,
+    parseInt(hex.slice(5, 7), 16) / 255,
+  )
+  const targetSkin = rawColor(mii.skinTone)
+  const skinIndex = model.charInfo.faceColor
+  const baseSkin = rawColor(facePalette[skinIndex]?.hex ?? facePalette[0].hex)
+  const targetHair = rawColor(gradientColor(hairPalette, mii.hairHue))
+  const customSkin = !facePalette.some((entry) => entry.hex.toLowerCase() === mii.skinTone.toLowerCase())
+  const customHair = !Number.isInteger(mii.hairHue)
+  for (const obj of model.meshes.children) {
+    if (!(obj instanceof THREE.Mesh)) continue
+    const kind = obj.geometry.userData.modulateType
+    const mat = obj.material as FFLShaderMaterial & { color: THREE.Color; map: THREE.Texture | null }
+    if (kind === 2 && customSkin) mat.color = targetSkin.clone()
+    if ((kind === 4 || kind === 1) && customHair) mat.color = targetHair.clone()
+    if (kind === 0 && customSkin) {
+      if (mat.map) {
+        const ratio = [targetSkin.r / Math.max(baseSkin.r, .001), targetSkin.g / Math.max(baseSkin.g, .001), targetSkin.b / Math.max(baseSkin.b, .001)].map((v) => v.toFixed(6)).join(",")
+        mat.fragmentShader = mat.fragmentShader.replace("color = vec4(texel.rgb, u_opacity * texel.a);", `color = vec4(clamp(texel.rgb * vec3(${ratio}), 0.0, 1.0), u_opacity * texel.a);`)
+        mat.needsUpdate = true
+      } else mat.color = targetSkin.clone()
+    }
   }
 }

@@ -95,8 +95,10 @@ Some features may be prototype-only; verify behavior in the running application 
 These are implementation limits, not results from a user test:
 
 - **Save Mii** stores the appearance and profile in this browser on this device. Refresh the page and choose **Restore saved Mii**. Nothing is uploaded, and another browser or device will not have the save.
+- **Navigation** uses an icon-and-label row for the customization categories. Sections can be visited in any order.
 - **Keyboard:** arrows move focus, Enter selects, Esc returns to Face, and Ctrl/Cmd+Z and Ctrl/Cmd+Shift+Z undo and redo. Text fields keep normal text undo. Gamepad controls are not implemented.
-- **Colors** are the renderer's preset lists: 6 skin, 8 hair, 6 eye, 5 mouth, and 6 glasses-frame colors. The controls do not mix a custom shade.
+- **Long lists** such as hair and eyes are shown 12 at a time, with the color control above the list.
+- **Colors:** Skin, hair, and eye sliders blend between the renderer's preset colors for custom shades in the 3D preview. Eyebrows and moustaches use the nearest original hair shade. Mouth and glasses colors use fixed presets. The fallback preview may approximate custom hair and eye colors.
 - **3D preview** needs the local Miitomo resource described above. Without it, the page uses the approximate fallback preview.
 - The head is drawn with FFL.js's Wii U shader port, not Nintendo's original Wii renderer.
 
@@ -152,4 +154,4 @@ Make sure you are in the folder containing `package.json` and use a supported No
 
 ## Credits
 
-Created by the project team for an educational UI/UX redesign assignment. Original Wii and Mii concepts belong to Nintendo. This project is an unofficial educational prototype. See [asset and technology credits](CREDITS.md) for linked sources, contributors, and licenses.
+Created by the project team for an educational UI/UX redesign assignment. Original Wii and Mii concepts belong to Nintendo. This project is an unofficial educational prototype. See [asset and technology credits](CREDITS.md) for linked sources, contributors, and licenses, and [presentation notes](PRESENTATION-CURRENT.md) for the current prototype and its limitations.

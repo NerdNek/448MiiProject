@@ -84,3 +84,25 @@ export function paletteIndex(palette: PaletteColor[], hex: string) {
   const found = palette.findIndex((entry) => entry.hex.toLowerCase() === hex.toLowerCase())
   return found >= 0 ? found : 0
 }
+
+/** Interpolate between neighboring palette entries in display RGB. */
+export function gradientColor(palette: PaletteColor[], value: number) {
+  const v = Math.max(0, Math.min(palette.length - 1, value))
+  const a = palette[Math.floor(v)].hex, b = palette[Math.ceil(v)].hex, t = v % 1
+  const rgb = [1, 3, 5].map((i) => Math.round(parseInt(a.slice(i, i + 2), 16) * (1 - t) + parseInt(b.slice(i, i + 2), 16) * t))
+  return `#${rgb.map((n) => n.toString(16).padStart(2, "0")).join("")}`
+}
+
+/** Recover the closest slider position for a stored interpolated color. */
+export function gradientPosition(palette: PaletteColor[], hex: string) {
+  const preset = palette.findIndex((entry) => entry.hex.toLowerCase() === hex.toLowerCase())
+  if (preset >= 0) return preset
+  const rgb = [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16))
+  let best = 0, distance = Infinity
+  for (let i = 0; i <= (palette.length - 1) * 100; i++) {
+    const test = gradientColor(palette, i / 100)
+    const diff = [1, 3, 5].reduce((sum, at, k) => sum + (parseInt(test.slice(at, at + 2), 16) - rgb[k]) ** 2, 0)
+    if (diff < distance) { distance = diff; best = i / 100 }
+  }
+  return best
+}

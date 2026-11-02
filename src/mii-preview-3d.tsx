@@ -661,8 +661,8 @@ function contactShadowTexture() {
 }
 
 function fallbackLook(mii: MiiLook): MiiLook {
-  const hair = hairPalette[mii.hairHue] ?? hairPalette[0]
-  const eye = eyePalette[mii.eyeHue] ?? eyePalette[0]
+  const hair = hairPalette[Math.round(mii.hairHue)] ?? hairPalette[0]
+  const eye = eyePalette[Math.round(mii.eyeHue)] ?? eyePalette[0]
   return {
     ...mii,
     faceShape: mii.faceShape % 3,

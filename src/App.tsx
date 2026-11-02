@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { FeatureThumb } from "./ffl-thumb"
 import { fflCounts, getFflSession } from "./ffl/runtime"
 import type { ThumbPart } from "./ffl/runtime"
-import { eyePalette, facePalette, glassPalette, hairPalette, mouthPalette, type PaletteColor } from "./ffl/palette"
+import { eyePalette, facePalette, glassPalette, hairPalette, mouthPalette, gradientColor, gradientPosition, type PaletteColor } from "./ffl/palette"
 import { readSavedMii, writeSavedMii, type StoredMii } from "./mii-storage"
 import { FflPreview } from "./ffl-preview"
 import { maskedSprite } from "./masked-sprite"
@@ -57,7 +57,8 @@ type History = {
   future: MiiState[]
 }
 
-const eyebrowDefaults = { eyebrowY: 12, eyebrowX: 4, eyebrowSize: 4, eyebrowRotation: 4 }
+// eyebrowY must stay above eyeY (11+ touches the default eyes) and below the default bangs (9 hides under them).
+const eyebrowDefaults = { eyebrowY: 10, eyebrowX: 3, eyebrowSize: 3, eyebrowRotation: 5 }
 const eyeDefaults = { eyeY: 12, eyeX: 4, eyeSize: 4, eyeRotation: 4 }
 
 const initialMii: MiiState = {
@@ -95,6 +96,8 @@ const initialMii: MiiState = {
   gender: "Nonbinary",
 }
 
+const skinGradient = [facePalette[0], facePalette[3], facePalette[1], facePalette[2], facePalette[4], facePalette[5]]
+
 const categories: { id: CategoryId; label: string; hint: string }[] = [
   { id: "face", label: "Face", hint: "Choose face shape and skin tone" },
   { id: "hair", label: "Hair", hint: "Browse hairstyles and colors" },
@@ -107,6 +110,18 @@ const categories: { id: CategoryId; label: string; hint: string }[] = [
   { id: "accessories", label: "Extras", hint: "Add a beauty mark" },
   { id: "profile", label: "Profile", hint: "Name, birthday, and identity" },
 ]
+
+const groups: { id: string; label: string; options: CategoryId[] }[] = [
+  { id: "face", label: "Face", options: ["face", "nose", "mouth"] },
+  { id: "hair", label: "Hair", options: ["hair"] },
+  { id: "eyes", label: "Eyes", options: ["eyes", "eyebrows"] },
+  { id: "accessories", label: "Accessories", options: ["glasses", "facialHair", "accessories"] },
+  { id: "profile", label: "Profile", options: ["profile"] },
+]
+
+function groupFor(id: CategoryId) {
+  return groups.find((group) => group.options.includes(id)) ?? groups[0]
+}
 
 const monthNames = [
   "January",
@@ -262,8 +277,8 @@ function Icon({ name, size = 22 }: { name: string; size?: number }) {
 }
 
 function MiiPreview({ mii }: { mii: MiiState }) {
-  const hair = hairPalette[mii.hairHue] ?? hairPalette[0]
-  const eye = eyePalette[mii.eyeHue] ?? eyePalette[0]
+  const hair = hairPalette[Math.round(mii.hairHue)] ?? hairPalette[0]
+  const eye = eyePalette[Math.round(mii.eyeHue)] ?? eyePalette[0]
   const drawn = {
     ...mii,
     faceShape: mii.faceShape % 3,
@@ -610,7 +625,7 @@ function BackgroundMusic() {
   return <div className="music-control">
     <audio ref={audioRef} src="/ffl/music/mii-channel-editing.mp3" loop preload="none" onPlay={() => setPlaying(true)} onPause={() => setPlaying(false)} onError={() => setUnavailable(true)} />
     <button type="button" data-focusable onClick={() => void toggle()} aria-label={playing ? "Pause background music" : "Play background music"} disabled={unavailable}>
-      {unavailable ? "Music unavailable" : playing ? "❚❚ Music" : "▶ Music"}
+      {unavailable ? "Music unavailable" : playing ? "Pause music" : "Play music"}
     </button>
   </div>
 }
@@ -661,27 +676,61 @@ function ChoiceGrid({
   type: string
   part: ThumbPart
 }) {
+  const pageSize = count > 18 ? 12 : count
+  const pageCount = Math.max(1, Math.ceil(count / pageSize))
+  const [page, setPage] = useState(() => Math.floor(selected / pageSize))
+  const listKey = useRef(part)
+  if (listKey.current !== part) {
+    listKey.current = part
+    setPage(Math.floor(selected / pageSize))
+  }
+  useEffect(() => {
+    setPage(Math.floor(selected / pageSize))
+  }, [selected, pageSize])
+  const start = page * pageSize
+  const visible = Array.from({ length: Math.min(pageSize, count - start) }, (_, offset) => start + offset)
+  const selectedVisible = selected >= start && selected < start + pageSize
   return (
-    <div className={count > 9 ? "choice-grid dense" : "choice-grid"}>
-      {Array.from({ length: count }).map((_, index) => (
-        <button
-          className={`feature-choice ${selected === index ? "selected" : ""}`}
-          key={index}
-          onClick={() => onSelect(index)}
-          data-focusable
-          aria-label={`${type} ${index + 1}`}
-          aria-pressed={selected === index}
-        >
-          <span className={`mini-feature ${type}`}>
-            <FeatureThumb part={part} index={index} />
+    <div className="choice-browser">
+      {pageCount > 1 && (
+        <div className="choice-pager">
+          <button type="button" onClick={() => setPage((current) => Math.max(0, current - 1))} disabled={page === 0} data-focusable>
+            Previous
+          </button>
+          <span>
+            {start + 1}–{start + visible.length} of {count}
           </span>
-          {selected === index && (
-            <span className="choice-check">
-              <Icon name="check" size={13} />
-            </span>
+          <button type="button" onClick={() => setPage((current) => Math.min(pageCount - 1, current + 1))} disabled={page >= pageCount - 1} data-focusable>
+            Next
+          </button>
+          {!selectedVisible && (
+            <button type="button" onClick={() => setPage(Math.floor(selected / pageSize))} data-focusable>
+              Show selected {type} {selected + 1}
+            </button>
           )}
-        </button>
-      ))}
+        </div>
+      )}
+      <div className={count > 9 ? "choice-grid dense" : "choice-grid"}>
+        {visible.map((index) => (
+          <button
+            className={`feature-choice ${selected === index ? "selected" : ""}`}
+            key={index}
+            onClick={() => onSelect(index)}
+            data-focusable
+            aria-label={`${type} ${index + 1}`}
+            aria-pressed={selected === index}
+          >
+            <span className={`mini-feature ${type}`}>
+              <FeatureThumb part={part} index={index} />
+            </span>
+            {selected === index && (
+              <span className="choice-check">
+                <Icon name="check" size={13} />
+              </span>
+            )}
+          </button>
+        ))}
+      </div>
     </div>
   )
 }
@@ -691,35 +740,45 @@ function ColorControl({
   onChange,
   palette,
   label,
+  smooth = false,
+  hex,
 }: {
   value: number
   onChange: (value: number) => void
   palette: PaletteColor[]
   label: string
+  smooth?: boolean
+  hex?: string
 }) {
   const index = Math.min(Math.max(value, 0), palette.length - 1)
-  const selected = palette[index]
+  const isPreset = Number.isInteger(index)
+  const chosenColor = (hex ?? gradientColor(palette, index)).toUpperCase()
+  const valueText = isPreset
+    ? `${palette[index].name}, ${chosenColor}, preset ${index + 1} of ${palette.length}`
+    : `Custom shade ${chosenColor}, between ${palette[Math.floor(index)].name} and ${palette[Math.ceil(index)].name}`
+  const sliderId = `${label.toLowerCase().replace(/\s+/g, "-")}-palette`
   return (
     <div className="color-control">
       <div className="control-label-row">
-        <label htmlFor={`${label}-palette`}>{label}</label>
-        <output>
-          {selected.name} · {index + 1} of {palette.length}
+        <label htmlFor={sliderId}>{label}</label>
+        {/* The slider's aria-valuetext announces the name and hex; this is the visual readout. */}
+        <output htmlFor={sliderId} aria-hidden="true">
+          {chosenColor}
         </output>
       </div>
       <div className="hue-wrap">
         <input
-          id={`${label}-palette`}
+          id={sliderId}
           className="palette-slider"
           type="range"
           min="0"
           max={palette.length - 1}
-          step="1"
+          step={smooth ? "0.01" : "1"}
           value={index}
           onChange={(e) => onChange(Number(e.target.value))}
           data-focusable
           aria-label={`${label} palette`}
-          aria-valuetext={`${selected.name}, ${index + 1} of ${palette.length}`}
+          aria-valuetext={valueText}
           style={{
             background: `linear-gradient(90deg, ${palette.map((entry) => entry.hex).join(", ")})`,
           }}
@@ -727,7 +786,7 @@ function ColorControl({
         <span
           className="hue-thumb-preview"
           style={{
-            background: selected.hex,
+            background: chosenColor,
             left: `${(index / Math.max(1, palette.length - 1)) * 100}%`,
           }}
         />
@@ -740,13 +799,13 @@ function ColorControl({
             style={{ background: entry.hex }}
             onClick={() => onChange(entryIndex)}
             data-focusable
-            aria-label={`${label} ${entry.name}, ${entryIndex + 1} of ${palette.length}`}
+            aria-label={`${label} ${entry.name}, ${entry.hex.toUpperCase()}, preset ${entryIndex + 1} of ${palette.length}`}
             aria-pressed={entryIndex === index}
           />
         ))}
       </div>
       <p className="microcopy">
-        {palette.length} preset colors. The slider and swatches choose one of them. They do not mix a custom shade.
+        {smooth ? "Drag for shades between presets, or choose a swatch." : `${palette.length} preset colors. The slider and swatches choose one of them.`}
       </p>
     </div>
   )
@@ -815,6 +874,12 @@ const keyboardRows = [
 
 export default function App() {
   const [category, setCategory] = useState<CategoryId>("face")
+  const [lastByGroup, setLastByGroup] = useState<Record<string, CategoryId>>({})
+  const goTo = useCallback((id: CategoryId) => {
+    setCategory(id)
+    const group = groupFor(id)
+    setLastByGroup((current) => ({ ...current, [group.id]: id }))
+  }, [])
   const [history, setHistory] = useState<History>({
     past: [],
     present: initialMii,
@@ -945,7 +1010,7 @@ export default function App() {
           return
         }
         event.preventDefault()
-        setCategory("face")
+        goTo("face")
         notify("Back to Face")
         return
       }
@@ -1037,29 +1102,14 @@ export default function App() {
               part="face"
             />
             <div className="subsection">
-              <h3>Skin color</h3>
-              <div className="large-swatches">
-                {facePalette.map((entry, index) => (
-                  <button
-                    key={entry.hex}
-                    className={
-                      mii.skinTone.toLowerCase() === entry.hex.toLowerCase()
-                        ? "skin-swatch active"
-                        : "skin-swatch"
-                    }
-                    style={{ background: entry.hex }}
-                    onClick={() => updateMii({ skinTone: entry.hex })}
-                    data-focusable
-                    aria-label={`Skin color ${entry.name}, ${index + 1} of ${facePalette.length}`}
-                    aria-pressed={mii.skinTone.toLowerCase() === entry.hex.toLowerCase()}
-                  >
-                    {mii.skinTone.toLowerCase() === entry.hex.toLowerCase() && <Icon name="check" size={17} />}
-                  </button>
-                ))}
-              </div>
-              <p className="microcopy">
-                Six preset skin colors. Choosing one changes the rendered face. A custom shade is not available.
-              </p>
+              <ColorControl
+                label="Skin color"
+                value={gradientPosition(skinGradient, mii.skinTone)}
+                onChange={(index) => updateMii({ skinTone: gradientColor(skinGradient, index) })}
+                palette={skinGradient}
+                hex={mii.skinTone}
+                smooth
+              />
             </div>
           </>
         )
@@ -1070,6 +1120,16 @@ export default function App() {
               title="Choose a hairstyle"
               subtitle="Every style is available to every Mii."
             />
+            <div className="subsection choice-color">
+              <ColorControl
+                value={mii.hairHue}
+                onChange={(hairHue) => updateMii({ hairHue })}
+                palette={hairPalette}
+                label="Hair color"
+                smooth
+              />
+              <p className="microcopy">Eyebrows and moustaches use the nearest original shade.</p>
+            </div>
             <ChoiceGrid
               count={fflCounts.hairType}
               selected={mii.hairStyle}
@@ -1077,14 +1137,6 @@ export default function App() {
               type="hair"
               part="hair"
             />
-            <div className="subsection">
-              <ColorControl
-                value={mii.hairHue}
-                onChange={(hairHue) => updateMii({ hairHue })}
-                palette={hairPalette}
-                label="Hair color"
-              />
-            </div>
           </>
         )
       case "eyebrows":
@@ -1113,6 +1165,15 @@ export default function App() {
               title="Choose eyes"
               subtitle="Select a shape, then fine-tune it on the right."
             />
+            <div className="subsection choice-color">
+              <ColorControl
+                value={mii.eyeHue}
+                onChange={(eyeHue) => updateMii({ eyeHue })}
+                palette={eyePalette}
+                label="Eye color"
+                smooth
+              />
+            </div>
             <ChoiceGrid
               count={fflCounts.eyeType}
               selected={mii.eyeStyle}
@@ -1120,14 +1181,6 @@ export default function App() {
               type="eyes"
               part="eyes"
             />
-            <div className="subsection">
-              <ColorControl
-                value={mii.eyeHue}
-                onChange={(eyeHue) => updateMii({ eyeHue })}
-                palette={eyePalette}
-                label="Eye color"
-              />
-            </div>
           </>
         )
       case "nose":
@@ -1153,14 +1206,7 @@ export default function App() {
               title="Choose a mouth"
               subtitle="Give your Mii a little personality."
             />
-            <ChoiceGrid
-              count={fflCounts.mouthType}
-              selected={mii.mouthStyle}
-              onSelect={(mouthStyle) => updateMii({ mouthStyle })}
-              type="mouth"
-              part="mouth"
-            />
-            <div className="subsection">
+            <div className="subsection choice-color">
               <ColorControl
                 value={mii.mouthColor}
                 onChange={(mouthColor) => updateMii({ mouthColor })}
@@ -1168,6 +1214,13 @@ export default function App() {
                 label="Mouth color"
               />
             </div>
+            <ChoiceGrid
+              count={fflCounts.mouthType}
+              selected={mii.mouthStyle}
+              onSelect={(mouthStyle) => updateMii({ mouthStyle })}
+              type="mouth"
+              part="mouth"
+            />
           </>
         )
       case "glasses":
@@ -1308,14 +1361,7 @@ export default function App() {
         </div>
         <nav className="category-nav" aria-label="Customization categories">
           {categories.map((item) => (
-            <button
-              key={item.id}
-              className={category === item.id ? "category active" : "category"}
-              onClick={() => setCategory(item.id)}
-              title={item.hint}
-              data-focusable
-              aria-current={category === item.id ? "page" : undefined}
-            >
+            <button key={item.id} type="button" className={category === item.id ? "category active" : "category"} onClick={() => goTo(item.id)} title={item.hint} data-focusable aria-current={category === item.id ? "page" : undefined}>
               <Icon name={item.id} size={21} />
               <span>{item.label}</span>
               <small>{item.hint}</small>
@@ -1357,9 +1403,6 @@ export default function App() {
           <div className="category-breadcrumb">
             <Icon name={category} size={18} />
             <span>{activeCategory.label}</span>
-            <i />
-            Step {categories.findIndex((item) => item.id === category) + 1} of{" "}
-            {categories.length}
           </div>
           {renderCenter()}
         </section>
@@ -1662,7 +1705,7 @@ export default function App() {
         <div className="primary-actions">
           <button
             className="back-button"
-            onClick={() => setCategory("face")}
+            onClick={() => goTo("face")}
             data-focusable
           >
             <Icon name="back" size={20} /> Back

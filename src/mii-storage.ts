@@ -1,5 +1,3 @@
-import { facePalette } from "./ffl/palette"
-
 const STORAGE_KEY = "448-mii-creator-save-v1"
 
 export type StoredMii = {
@@ -57,14 +55,12 @@ export type ReadSavedResult =
 const integerFields = [
   "faceShape",
   "hairStyle",
-  "hairHue",
   "eyebrowStyle",
   "eyebrowY",
   "eyebrowX",
   "eyebrowSize",
   "eyebrowRotation",
   "eyeStyle",
-  "eyeHue",
   "eyeY",
   "eyeX",
   "eyeSize",
@@ -130,8 +126,9 @@ function isMii(value: unknown): value is StoredMii {
   if (typeof record.gender !== "string" || !genders.includes(record.gender)) return false
   const skinTone = record.skinTone
   if (typeof skinTone !== "string") return false
-  const skin = facePalette.some((entry) => entry.hex.toLowerCase() === skinTone.toLowerCase())
-  if (!skin) return false
+  if (!/^#[0-9a-f]{6}$/i.test(skinTone)) return false
+  if (typeof record.eyeHue !== "number" || !Number.isFinite(record.eyeHue) || record.eyeHue < 0 || record.eyeHue > 5) return false
+  if (typeof record.hairHue !== "number" || !Number.isFinite(record.hairHue) || record.hairHue < 0 || record.hairHue > 7) return false
   for (const field of integerFields) {
     const number = record[field]
     if (typeof number !== "number" || !Number.isInteger(number) || number < -8 || number > 200) {

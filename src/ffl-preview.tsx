@@ -3,6 +3,7 @@ import * as THREE from "three"
 import type { CharModel } from "ffl.js"
 import {
   createCharModel,
+  applyCustomColors,
   frontCamera,
   getFflSession,
   miiToCharInfo,
@@ -119,12 +120,13 @@ export function FflPreview({
           model.dispose()
           model = null
         }
-        model = createCharModel(session, miiToCharInfo(session, miiRef.current), renderer)
+        model = createCharModel(session, miiToCharInfo(session, miiRef.current), renderer, miiRef.current.eyeHue)
         if (disposed) {
           model.dispose()
           model = null
           return
         }
+        applyCustomColors(model, miiRef.current)
         pivot.add(model.meshes)
         if (body) {
           pivot.remove(body)
