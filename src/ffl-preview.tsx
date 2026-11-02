@@ -220,7 +220,7 @@ export function FflPreview({
         role="group"
         tabIndex={0}
         data-focusable
-        aria-label={`FFL preview of ${mii.name || "Unnamed Mii"}. Use arrow keys to turn; Home returns to the front view.`}
+        aria-label={`FFL preview of ${mii.name || "Unnamed Mii"}. Use arrow keys to turn; Home returns to the front view; Escape exits the preview.`}
         aria-keyshortcuts="ArrowLeft ArrowRight ArrowUp ArrowDown Home"
         onKeyDown={(event) => {
           if (["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(event.key)) {

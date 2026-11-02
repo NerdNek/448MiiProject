@@ -1230,6 +1230,14 @@ export default function App() {
         return
       }
       if (event.key === "Escape") {
+        if (active?.matches(".preview-canvas-wrap")) {
+          event.preventDefault()
+          active.blur()
+          document
+            .querySelector<HTMLElement>('.category[aria-current="page"]')
+            ?.focus()
+          return
+        }
         if (active?.matches("input, select, textarea")) {
           active.blur()
           return
@@ -1237,6 +1245,9 @@ export default function App() {
         event.preventDefault()
         playSfx("back")
         goTo("face")
+        document
+          .querySelector<HTMLElement>('.category[aria-label^="Face."]')
+          ?.focus()
         notify("Back to Face")
         return
       }
@@ -1842,12 +1853,16 @@ export default function App() {
                   <span>Move focus; turn preview when focused</span>
                 </div>
                 <div>
+                  <kbd className="wide">Tab</kbd>
+                  <span>Next control</span>
+                </div>
+                <div>
                   <kbd className="wide">Enter</kbd>
                   <span>Select</span>
                 </div>
                 <div>
                   <kbd className="wide">Esc</kbd>
-                  <span>Back</span>
+                  <span>Exit preview / back</span>
                 </div>
                 <div>
                   <kbd className="wide">⌘Z</kbd>
@@ -1889,10 +1904,13 @@ export default function App() {
             <b>Arrows</b> Move focus; turn preview when focused
           </span>
           <span>
+            <b>Tab</b> Next control
+          </span>
+          <span>
             <b>Enter</b> Select
           </span>
           <span>
-            <b>Esc</b> Back to Face
+            <b>Esc</b> Exit preview / back to Face
           </span>
           <span className="keyboard-guide">Ctrl or ⌘ Z undoes. Shift adds redo. Text fields keep their own undo.</span>
         </div>
