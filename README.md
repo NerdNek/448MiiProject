@@ -78,7 +78,21 @@ The FFL head is shown with a simple procedural torso inspired by the Wii Mii Cha
 
 ### Optional background music
 
-The Music button plays and pauses a user-supplied local track. To enable it, place the audio file at `public/ffl/music/mii-channel-editing.mp3`. The `public/ffl/` directory is gitignored, so the track is not included in the repository. Music starts only when the button is pressed.
+The Music button plays and pauses a user-supplied local track. To enable it, place the audio file at `public/ffl/music/mii-channel-editing.mp3`. The `public/ffl/` directory is gitignored, so the track is not included in the repository. Music starts only when the button is pressed. Vite may copy the local music and 3D resource into `dist/` when building; check build contents before sharing or deploying.
+
+### Optional sound effects
+
+Interface sounds use local copies of Mii Channel samples (see [credits](CREDITS.md)). Copy `Sample_0000.wav`–`Sample_0026.wav` from the downloaded "Sound Effects" sheet into `public/ffl/sfx/samples/`. Like the music, they are gitignored, and the production build removes `ffl/sfx/` from `dist/` so they are not published. Without the files, the button next to Music reads **Sounds unavailable** and the app is silent.
+
+| Action | Sample | Played by |
+| --- | --- | --- |
+| Select | `Sample_0014` | Categories, feature and color choices, pager, gender, redo, on-screen keys, Front view, music button |
+| Move focus | `Sample_0016` | Mouse hover over a control, or keyboard focus moving to one (not focus caused by a click) |
+| Back / cancel | `Sample_0015` | Back, Esc, undo, reset buttons, Backspace key, failed save or restore |
+| Adjust a value | `Sample_0005` | ± buttons, birthday menus, sliders (one tick per key press; silent while dragging or holding a key, then one tick on release) |
+| Save / confirm | `Sample_0025` | Save Mii, Restore saved Mii, Confirm name |
+
+The mapping and per-sound levels are in `src/sfx.ts`. **Mute sounds** is separate from the music control and is remembered in this browser. The mapping was chosen from acoustic measurements (pitch, envelope, and onset analysis), not from Nintendo's original assignments, which are not recorded in the sample sheet. To audition all 27 samples and pick a different mapping, run the dev server and open `/tools/sfx-audition.html`.
 
 ## How to use the prototype
 
@@ -111,7 +125,10 @@ These are implementation limits, not results from a user test:
 │   ├── App.tsx         # Main React application and interface interactions
 │   ├── index.css       # Global styles, layout, and visual design
 │   ├── main.tsx        # React entry point; mounts the app
+│   ├── sfx.ts          # Sound-effect mapping, playback, and mute state
 │   └── vite-env.d.ts   # Type declarations for Vite
+├── tools/
+│   └── sfx-audition.html  # Dev-only page for auditioning the local sound samples
 ├── index.html          # HTML entry point
 ├── package.json        # Dependencies and npm scripts
 ├── package-lock.json   # npm dependency lockfile

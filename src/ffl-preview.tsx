@@ -9,6 +9,7 @@ import {
   miiToCharInfo,
   type FflMii,
 } from "./ffl/runtime"
+import { playSfx } from "./sfx"
 
 /**
  * Head preview from FFL.js. The mesh and shader come from the Wii U FFL
@@ -233,7 +234,10 @@ export function FflPreview({
         <button
           type="button"
           data-focusable
-          onClick={() => resetRef.current()}
+          onClick={() => {
+            playSfx("select")
+            resetRef.current()
+          }}
           aria-label="Reset preview to front view"
         >
           Front view

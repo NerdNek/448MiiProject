@@ -1675,7 +1675,7 @@ body {
   white-space: nowrap;
 }
 
-.music-control { margin-left: auto; }
+.music-control { margin-left: auto; display: flex; gap: 6px; }
 .music-control button { border: 1px solid #b5cacc; border-radius: 999px; background: #fff; color: #315b62; padding: 6px 11px; font: inherit; font-size: 11px; cursor: pointer; white-space: nowrap; }
 .music-control button:focus-visible { outline: 3px solid #00a7ca; outline-offset: 2px; }
 .music-control button:disabled { opacity: .6; cursor: default; }

@@ -7,6 +7,7 @@ import { readSavedMii, writeSavedMii, type StoredMii } from "./mii-storage"
 import { FflPreview } from "./ffl-preview"
 import { maskedSprite } from "./masked-sprite"
 import { MiiWebGLPreview, canUseWebGL } from "./mii-preview-3d"
+import { playSfx, setSfxMuted, useFocusSfx, useSfxState, useSliderSfx } from "./sfx"
 
 type CategoryId = "face" | "hair" | "eyebrows" | "eyes" | "nose" | "mouth" | "glasses" | "facialHair" | "accessories" | "profile"
 
@@ -624,10 +625,30 @@ function BackgroundMusic() {
   }
   return <div className="music-control">
     <audio ref={audioRef} src="/ffl/music/mii-channel-editing.mp3" loop preload="none" onPlay={() => setPlaying(true)} onPause={() => setPlaying(false)} onError={() => setUnavailable(true)} />
-    <button type="button" data-focusable onClick={() => void toggle()} aria-label={playing ? "Pause background music" : "Play background music"} disabled={unavailable}>
+    <button type="button" data-focusable onClick={() => { playSfx("select"); void toggle() }} aria-label={playing ? "Pause background music" : "Play background music"} disabled={unavailable}>
       {unavailable ? "Music unavailable" : playing ? "Pause music" : "Play music"}
     </button>
+    <SoundEffectsToggle />
   </div>
+}
+
+function SoundEffectsToggle() {
+  const { muted, status } = useSfxState()
+  const unavailable = status === "unavailable"
+  return (
+    <button
+      type="button"
+      data-focusable
+      disabled={unavailable}
+      title={unavailable ? "Sound effect files are not installed in public/ffl/sfx/samples/" : undefined}
+      onClick={() => {
+        setSfxMuted(!muted)
+        if (muted) playSfx("select")
+      }}
+    >
+      {unavailable ? "Sounds unavailable" : muted ? "Unmute sounds" : "Mute sounds"}
+    </button>
+  )
 }
 
 function LiveMii({ mii }: { mii: MiiState }) {
@@ -694,17 +715,17 @@ function ChoiceGrid({
     <div className="choice-browser">
       {pageCount > 1 && (
         <div className="choice-pager">
-          <button type="button" onClick={() => setPage((current) => Math.max(0, current - 1))} disabled={page === 0} data-focusable>
+          <button type="button" onClick={() => { playSfx("select"); setPage((current) => Math.max(0, current - 1)) }} disabled={page === 0} data-focusable>
             Previous
           </button>
           <span>
             {start + 1}–{start + visible.length} of {count}
           </span>
-          <button type="button" onClick={() => setPage((current) => Math.min(pageCount - 1, current + 1))} disabled={page >= pageCount - 1} data-focusable>
+          <button type="button" onClick={() => { playSfx("select"); setPage((current) => Math.min(pageCount - 1, current + 1)) }} disabled={page >= pageCount - 1} data-focusable>
             Next
           </button>
           {!selectedVisible && (
-            <button type="button" onClick={() => setPage(Math.floor(selected / pageSize))} data-focusable>
+            <button type="button" onClick={() => { playSfx("select"); setPage(Math.floor(selected / pageSize)) }} data-focusable>
               Show selected {type} {selected + 1}
             </button>
           )}
@@ -715,7 +736,10 @@ function ChoiceGrid({
           <button
             className={`feature-choice ${selected === index ? "selected" : ""}`}
             key={index}
-            onClick={() => onSelect(index)}
+            onClick={() => {
+              playSfx("select")
+              onSelect(index)
+            }}
             data-focusable
             aria-label={`${type} ${index + 1}`}
             aria-pressed={selected === index}
@@ -757,6 +781,7 @@ function ColorControl({
     ? `${palette[index].name}, ${chosenColor}, preset ${index + 1} of ${palette.length}`
     : `Custom shade ${chosenColor}, between ${palette[Math.floor(index)].name} and ${palette[Math.ceil(index)].name}`
   const sliderId = `${label.toLowerCase().replace(/\s+/g, "-")}-palette`
+  const sliderSfx = useSliderSfx()
   return (
     <div className="color-control">
       <div className="control-label-row">
@@ -775,7 +800,13 @@ function ColorControl({
           max={palette.length - 1}
           step={smooth ? "0.01" : "1"}
           value={index}
-          onChange={(e) => onChange(Number(e.target.value))}
+          onPointerDown={sliderSfx.onPointerDown}
+          onKeyDown={sliderSfx.onKeyDown}
+          onKeyUp={sliderSfx.onKeyUp}
+          onChange={(e) => {
+            sliderSfx.changed()
+            onChange(Number(e.target.value))
+          }}
           data-focusable
           aria-label={`${label} palette`}
           aria-valuetext={valueText}
@@ -797,7 +828,10 @@ function ColorControl({
             key={entry.hex}
             className={entryIndex === index ? "swatch active" : "swatch"}
             style={{ background: entry.hex }}
-            onClick={() => onChange(entryIndex)}
+            onClick={() => {
+              playSfx("select")
+              onChange(entryIndex)
+            }}
             data-focusable
             aria-label={`${label} ${entry.name}, ${entry.hex.toUpperCase()}, preset ${entryIndex + 1} of ${palette.length}`}
             aria-pressed={entryIndex === index}
@@ -830,6 +864,11 @@ function AdjustRow({
   rightIcon: string
   onChange: (value: number) => void
 }) {
+  const sliderSfx = useSliderSfx()
+  const nudge = (next: number) => {
+    if (next !== value) playSfx("adjust")
+    onChange(next)
+  }
   return (
     <div className="adjust-row">
       <div className="adjust-heading">
@@ -838,7 +877,7 @@ function AdjustRow({
       </div>
       <div className="adjust-controls">
         <button
-          onClick={() => onChange(Math.max(min, value - step))}
+          onClick={() => nudge(Math.max(min, value - step))}
           data-focusable
           aria-label={`Decrease ${label}`}
         >
@@ -850,12 +889,18 @@ function AdjustRow({
           max={max}
           step={step}
           value={value}
-          onChange={(e) => onChange(Number(e.target.value))}
+          onPointerDown={sliderSfx.onPointerDown}
+          onKeyDown={sliderSfx.onKeyDown}
+          onKeyUp={sliderSfx.onKeyUp}
+          onChange={(e) => {
+            sliderSfx.changed()
+            onChange(Number(e.target.value))
+          }}
           data-focusable
           aria-label={label}
         />
         <button
-          onClick={() => onChange(Math.min(max, value + step))}
+          onClick={() => nudge(Math.min(max, value + step))}
           data-focusable
           aria-label={`Increase ${label}`}
         >
@@ -897,6 +942,7 @@ export default function App() {
   const [storedMii, setStoredMii] = useState<StoredMii | null>(null)
   const [storageError, setStorageError] = useState("")
   const mii = history.present
+  useFocusSfx()
 
   const notify = useCallback((message: string, ok = true) => {
     window.clearTimeout(toastTimer.current)
@@ -932,6 +978,11 @@ export default function App() {
     [notify],
   )
 
+  const resetMii = (changes: Partial<MiiState>, feedback: string) => {
+    playSfx("back")
+    updateMii(changes, feedback)
+  }
+
   const undo = useCallback(() => {
     setHistory((current) => {
       if (!current.past.length) return current
@@ -942,7 +993,10 @@ export default function App() {
         future: [current.present, ...current.future],
       }
     })
-    if (history.past.length) notify("Last change undone")
+    if (history.past.length) {
+      playSfx("back")
+      notify("Last change undone")
+    }
   }, [history.past.length, notify])
 
   const replaceMii = useCallback((next: MiiState, feedback?: string) => {
@@ -961,17 +1015,21 @@ export default function App() {
     const result = writeSavedMii(mii)
     if (result.ok) {
       setStoredMii(mii)
+      playSfx("save")
       notify(`${mii.name || "Unnamed Mii"} was saved in this browser.`)
     } else {
+      playSfx("back")
       notify(result.reason, false)
     }
   }, [mii, notify])
 
   const restoreSaved = useCallback(() => {
     if (!storedMii) {
+      playSfx("back")
       notify("No saved Mii is available in this browser.", false)
       return
     }
+    playSfx("save")
     replaceMii(storedMii, `Restored ${storedMii.name || "the saved Mii"} from this browser.`)
   }, [replaceMii, storedMii, notify])
 
@@ -985,7 +1043,10 @@ export default function App() {
         future: current.future.slice(1),
       }
     })
-    if (history.future.length) notify("Change restored")
+    if (history.future.length) {
+      playSfx("select")
+      notify("Change restored")
+    }
   }, [history.future.length, notify])
 
   useEffect(() => {
@@ -1010,6 +1071,7 @@ export default function App() {
           return
         }
         event.preventDefault()
+        playSfx("back")
         goTo("face")
         notify("Back to Face")
         return
@@ -1071,7 +1133,7 @@ export default function App() {
     }
     window.addEventListener("keydown", onKeyDown)
     return () => window.removeEventListener("keydown", onKeyDown)
-  }, [notify, redo, undo])
+  }, [goTo, notify, redo, undo])
 
   const activeCategory = useMemo(
     () => categories.find((item) => item.id === category)!,
@@ -1079,6 +1141,7 @@ export default function App() {
   )
 
   const appendName = (key: string) => {
+    playSfx(key === "backspace" ? "back" : "select")
     if (key === "backspace") updateMii({ name: mii.name.slice(0, -1) })
     else if (key === "space" && mii.name.length < 12)
       updateMii({ name: `${mii.name} ` })
@@ -1333,7 +1396,10 @@ export default function App() {
                 </button>
                 <button
                   className="key-confirm"
-                  onClick={() => notify("Name confirmed")}
+                  onClick={() => {
+                    playSfx("save")
+                    notify("Name confirmed")
+                  }}
                   data-focusable
                 >
                   <Icon name="check" size={16} /> Confirm
@@ -1361,7 +1427,7 @@ export default function App() {
         </div>
         <nav className="category-nav" aria-label="Customization categories">
           {categories.map((item) => (
-            <button key={item.id} type="button" className={category === item.id ? "category active" : "category"} onClick={() => goTo(item.id)} title={item.hint} data-focusable aria-current={category === item.id ? "page" : undefined}>
+            <button key={item.id} type="button" className={category === item.id ? "category active" : "category"} onClick={() => { playSfx("select"); goTo(item.id) }} title={item.hint} data-focusable aria-current={category === item.id ? "page" : undefined}>
               <Icon name={item.id} size={21} />
               <span>{item.label}</span>
               <small>{item.hint}</small>
@@ -1417,7 +1483,7 @@ export default function App() {
                 <AdjustRow label="Spacing" value={mii.eyebrowX} {...fflRanges.brows.x} step={1} leftIcon="left" rightIcon="right" onChange={(eyebrowX) => updateMii({ eyebrowX })} />
                 <AdjustRow label="Size" value={mii.eyebrowSize} {...fflRanges.brows.scale} step={1} leftIcon="minus" rightIcon="plus" onChange={(eyebrowSize) => updateMii({ eyebrowSize })} />
                 <AdjustRow label="Rotation" value={mii.eyebrowRotation} {...fflRanges.brows.rotate} step={1} leftIcon="rotateLeft" rightIcon="rotateRight" onChange={(eyebrowRotation) => updateMii({ eyebrowRotation })} />
-                <button className="reset-button" onClick={() => updateMii(eyebrowDefaults, "Eyebrow adjustments reset")} data-focusable>Reset eyebrow adjustments</button>
+                <button className="reset-button" onClick={() => resetMii(eyebrowDefaults, "Eyebrow adjustments reset")} data-focusable>Reset eyebrow adjustments</button>
               </> : <p className="adjust-intro">Eyebrow adjustments require the FFL preview.</p>}
             </>
           ) : category === "eyes" ? (
@@ -1477,7 +1543,7 @@ export default function App() {
               <button
                 className="reset-button"
                 onClick={() =>
-                  updateMii(eyeDefaults, "Eye adjustments reset")
+                  resetMii(eyeDefaults, "Eye adjustments reset")
                 }
                 data-focusable
               >
@@ -1495,7 +1561,7 @@ export default function App() {
                   <AdjustRow label="Vertical position" value={mii.glassY} {...fflRanges.glasses.y} step={1} leftIcon="down" rightIcon="up" onChange={(glassY) => updateMii({ glassY })} />
                   <AdjustRow label="Size" value={mii.glassSize} {...fflRanges.glasses.scale} step={1} leftIcon="minus" rightIcon="plus" onChange={(glassSize) => updateMii({ glassSize })} />
                   <ColorControl value={mii.glassColor} onChange={(glassColor) => updateMii({ glassColor })} palette={glassPalette} label="Frame color" />
-                  <button className="reset-button" onClick={() => updateMii({ glassY: 10, glassSize: 4, glassColor: 0 }, "Glasses adjustments reset")} data-focusable>Reset glasses adjustments</button>
+                  <button className="reset-button" onClick={() => resetMii({ glassY: 10, glassSize: 4, glassColor: 0 }, "Glasses adjustments reset")} data-focusable>Reset glasses adjustments</button>
                 </>
               ) : <p className="adjust-intro">Glasses adjustments require the FFL preview.</p>}
             </>
@@ -1509,7 +1575,7 @@ export default function App() {
                   <p className="adjust-intro">These steps move the moustache. Beard color still follows the hair color.</p>
                   <AdjustRow label="Vertical position" value={mii.mustacheY} {...fflRanges.mustache.y} step={1} leftIcon="down" rightIcon="up" onChange={(mustacheY) => updateMii({ mustacheY })} />
                   <AdjustRow label="Size" value={mii.mustacheSize} {...fflRanges.mustache.scale} step={1} leftIcon="minus" rightIcon="plus" onChange={(mustacheSize) => updateMii({ mustacheSize })} />
-                  <button className="reset-button" onClick={() => updateMii({ mustacheY: 10, mustacheSize: 4 }, "Moustache adjustments reset")} data-focusable>Reset moustache adjustments</button>
+                  <button className="reset-button" onClick={() => resetMii({ mustacheY: 10, mustacheSize: 4 }, "Moustache adjustments reset")} data-focusable>Reset moustache adjustments</button>
                 </>
               ) : <p className="adjust-intro">Moustache adjustments require the FFL preview.</p>}
             </>
@@ -1524,7 +1590,7 @@ export default function App() {
                   <AdjustRow label="Vertical position" value={mii.moleY} {...fflRanges.mole.y} step={1} leftIcon="down" rightIcon="up" onChange={(moleY) => updateMii({ moleY })} />
                   <AdjustRow label="Horizontal position" value={mii.moleX} {...fflRanges.mole.x} step={1} leftIcon="left" rightIcon="right" onChange={(moleX) => updateMii({ moleX })} />
                   <AdjustRow label="Size" value={mii.moleSize} {...fflRanges.mole.scale} step={1} leftIcon="minus" rightIcon="plus" onChange={(moleSize) => updateMii({ moleSize })} />
-                  <button className="reset-button" onClick={() => updateMii({ moleX: 8, moleY: 8, moleSize: 4 }, "Mole adjustments reset")} data-focusable>Reset mole adjustments</button>
+                  <button className="reset-button" onClick={() => resetMii({ moleX: 8, moleY: 8, moleSize: 4 }, "Mole adjustments reset")} data-focusable>Reset mole adjustments</button>
                 </>
               ) : <p className="adjust-intro">Mole adjustments require the FFL preview.</p>}
             </>
@@ -1535,7 +1601,7 @@ export default function App() {
               {fflRanges ? <>
                 <AdjustRow label="Vertical position" value={mii.noseY} {...fflRanges.nose.y} step={1} leftIcon="up" rightIcon="down" onChange={(noseY) => updateMii({ noseY })} />
                 <AdjustRow label="Size" value={mii.noseSize} {...fflRanges.nose.scale} step={1} leftIcon="minus" rightIcon="plus" onChange={(noseSize) => updateMii({ noseSize })} />
-                <button className="reset-button" onClick={() => updateMii({ noseY: 9, noseSize: 4 }, "Nose adjustments reset")} data-focusable>Reset nose adjustments</button>
+                <button className="reset-button" onClick={() => resetMii({ noseY: 9, noseSize: 4 }, "Nose adjustments reset")} data-focusable>Reset nose adjustments</button>
               </> : <p className="adjust-intro">Adjustments require the FFL preview.</p>}
             </>
           ) : category === "mouth" ? (
@@ -1545,7 +1611,7 @@ export default function App() {
               {fflRanges ? <>
                 <AdjustRow label="Vertical position" value={mii.mouthY} {...fflRanges.mouth.y} step={1} leftIcon="up" rightIcon="down" onChange={(mouthY) => updateMii({ mouthY })} />
                 <AdjustRow label="Size" value={mii.mouthSize} {...fflRanges.mouth.scale} step={1} leftIcon="minus" rightIcon="plus" onChange={(mouthSize) => updateMii({ mouthSize })} />
-                <button className="reset-button" onClick={() => updateMii({ mouthY: 13, mouthSize: 4 }, "Mouth adjustments reset")} data-focusable>Reset mouth adjustments</button>
+                <button className="reset-button" onClick={() => resetMii({ mouthY: 13, mouthSize: 4 }, "Mouth adjustments reset")} data-focusable>Reset mouth adjustments</button>
               </> : <p className="adjust-intro">Adjustments require the FFL preview.</p>}
             </>
           ) : category === "profile" ? (
@@ -1565,6 +1631,7 @@ export default function App() {
                   <select
                     value={mii.month}
                     onChange={(e) => {
+                      playSfx("adjust")
                       const month = Number(e.target.value)
                       updateMii({
                         month,
@@ -1585,7 +1652,10 @@ export default function App() {
                   <span>Day</span>
                   <select
                     value={mii.day}
-                    onChange={(e) => updateMii({ day: Number(e.target.value) })}
+                    onChange={(e) => {
+                      playSfx("adjust")
+                      updateMii({ day: Number(e.target.value) })
+                    }}
                     data-focusable
                     aria-label="Birth day"
                   >
@@ -1610,7 +1680,10 @@ export default function App() {
                       role="radio"
                       aria-checked={mii.gender === gender}
                       className={mii.gender === gender ? "selected" : ""}
-                      onClick={() => updateMii({ gender })}
+                      onClick={() => {
+                        playSfx("select")
+                        updateMii({ gender })
+                      }}
                       data-focusable
                     >
                       {mii.gender === gender && <Icon name="check" size={15} />}
@@ -1705,7 +1778,10 @@ export default function App() {
         <div className="primary-actions">
           <button
             className="back-button"
-            onClick={() => goTo("face")}
+            onClick={() => {
+              playSfx("back")
+              goTo("face")
+            }}
             data-focusable
           >
             <Icon name="back" size={20} /> Back
