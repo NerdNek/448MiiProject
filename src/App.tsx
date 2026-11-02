@@ -933,33 +933,35 @@ function ColorControl({
                   <output aria-live="polite">{chosenColor}</output>
                 </div>
               </div>
-              {(
-                [
-                  ["Hue", 0, 360, Math.round(hsv.h), (v: number) => { hueMemory.current = v; return hsvToHex(v, hsv.s, hsv.v) }],
-                  ["Saturation", 0, 100, Math.round(hsv.s * 100), (v: number) => { saturationMemory.current = v / 100; return hsvToHex(hsv.h, v / 100, hsv.v) }],
-                  ["Brightness", 0, 100, Math.round(hsv.v * 100), (v: number) => hsvToHex(hsv.h, hsv.s, v / 100)],
-                ] as const
-              ).map(([name, min, max, current, change]) => (
-                <label className="spectrum-row" key={name}>
-                  <span>{name}</span>
-                  <input
-                    type="range"
-                    min={min}
-                    max={max}
-                    value={current}
-                    onPointerDown={sliderSfx.onPointerDown}
-                    onKeyDown={sliderSfx.onKeyDown}
-                    onKeyUp={sliderSfx.onKeyUp}
-                    onChange={(event) => {
-                      sliderSfx.changed()
-                      pickCustom(change(Number(event.target.value)))
-                    }}
-                    aria-label={`${label} ${name}`}
-                    data-focusable
-                  />
-                  <output aria-hidden="true">{current}</output>
-                </label>
-              ))}
+              <div className="spectrum-sliders">
+                {(
+                  [
+                    ["Hue", 0, 360, Math.round(hsv.h), (v: number) => { hueMemory.current = v; return hsvToHex(v, hsv.s, hsv.v) }],
+                    ["Saturation", 0, 100, Math.round(hsv.s * 100), (v: number) => { saturationMemory.current = v / 100; return hsvToHex(hsv.h, v / 100, hsv.v) }],
+                    ["Brightness", 0, 100, Math.round(hsv.v * 100), (v: number) => hsvToHex(hsv.h, hsv.s, v / 100)],
+                  ] as const
+                ).map(([name, min, max, current, change]) => (
+                  <label className="spectrum-row" key={name}>
+                    <span>{name}</span>
+                    <input
+                      type="range"
+                      min={min}
+                      max={max}
+                      value={current}
+                      onPointerDown={sliderSfx.onPointerDown}
+                      onKeyDown={sliderSfx.onKeyDown}
+                      onKeyUp={sliderSfx.onKeyUp}
+                      onChange={(event) => {
+                        sliderSfx.changed()
+                        pickCustom(change(Number(event.target.value)))
+                      }}
+                      aria-label={`${label} ${name}`}
+                      data-focusable
+                    />
+                    <output aria-hidden="true">{current}</output>
+                  </label>
+                ))}
+              </div>
             </div>
           )}
         </div>
@@ -968,14 +970,52 @@ function ColorControl({
   )
 }
 
+/** FFL Y values increase downward on the face, so vertical rows decrease on ↑ and increase on ↓. */
+type AdjustKind = "vertical" | "horizontal" | "spacing" | "size" | "rotation"
+
+const adjustChrome: Record<
+  AdjustKind,
+  { leftIcon: string; rightIcon: string; leftLabel: string; rightLabel: string }
+> = {
+  vertical: {
+    leftIcon: "up",
+    rightIcon: "down",
+    leftLabel: "Move up",
+    rightLabel: "Move down",
+  },
+  horizontal: {
+    leftIcon: "left",
+    rightIcon: "right",
+    leftLabel: "Move left",
+    rightLabel: "Move right",
+  },
+  spacing: {
+    leftIcon: "left",
+    rightIcon: "right",
+    leftLabel: "Move closer",
+    rightLabel: "Move farther apart",
+  },
+  size: {
+    leftIcon: "minus",
+    rightIcon: "plus",
+    leftLabel: "Make smaller",
+    rightLabel: "Make larger",
+  },
+  rotation: {
+    leftIcon: "rotateLeft",
+    rightIcon: "rotateRight",
+    leftLabel: "Rotate left",
+    rightLabel: "Rotate right",
+  },
+}
+
 function AdjustRow({
   label,
   value,
   min,
   max,
   step,
-  leftIcon,
-  rightIcon,
+  kind,
   onChange,
 }: {
   label: string
@@ -983,10 +1023,10 @@ function AdjustRow({
   min: number
   max: number
   step: number
-  leftIcon: string
-  rightIcon: string
+  kind: AdjustKind
   onChange: (value: number) => void
 }) {
+  const chrome = adjustChrome[kind]
   const sliderSfx = useSliderSfx()
   const nudge = (next: number) => {
     if (next !== value) playSfx("adjust")
@@ -1002,9 +1042,9 @@ function AdjustRow({
         <button
           onClick={() => nudge(Math.max(min, value - step))}
           data-focusable
-          aria-label={`Decrease ${label}`}
+          aria-label={`${chrome.leftLabel}: ${label}`}
         >
-          <Icon name={leftIcon} size={17} />
+          <Icon name={chrome.leftIcon} size={17} />
         </button>
         <input
           type="range"
@@ -1025,9 +1065,9 @@ function AdjustRow({
         <button
           onClick={() => nudge(Math.min(max, value + step))}
           data-focusable
-          aria-label={`Increase ${label}`}
+          aria-label={`${chrome.rightLabel}: ${label}`}
         >
-          <Icon name={rightIcon} size={17} />
+          <Icon name={chrome.rightIcon} size={17} />
         </button>
       </div>
     </div>
@@ -1574,10 +1614,10 @@ export default function App() {
             <>
               <div className="adjust-title"><div><span className="eyebrow">Fine tune</span><h2>Eyebrows</h2></div><span className="context-icon"><Icon name="eyebrows" /></span></div>
               {fflRanges ? <>
-                <AdjustRow label="Vertical position" value={mii.eyebrowY} {...fflRanges.brows.y} step={1} leftIcon="down" rightIcon="up" onChange={(eyebrowY) => updateMii({ eyebrowY })} />
-                <AdjustRow label="Spacing" value={mii.eyebrowX} {...fflRanges.brows.x} step={1} leftIcon="left" rightIcon="right" onChange={(eyebrowX) => updateMii({ eyebrowX })} />
-                <AdjustRow label="Size" value={mii.eyebrowSize} {...fflRanges.brows.scale} step={1} leftIcon="minus" rightIcon="plus" onChange={(eyebrowSize) => updateMii({ eyebrowSize })} />
-                <AdjustRow label="Rotation" value={mii.eyebrowRotation} {...fflRanges.brows.rotate} step={1} leftIcon="rotateLeft" rightIcon="rotateRight" onChange={(eyebrowRotation) => updateMii({ eyebrowRotation })} />
+                <AdjustRow label="Vertical position" value={mii.eyebrowY} {...fflRanges.brows.y} step={1} kind="vertical" onChange={(eyebrowY) => updateMii({ eyebrowY })} />
+                <AdjustRow label="Spacing" value={mii.eyebrowX} {...fflRanges.brows.x} step={1} kind="spacing" onChange={(eyebrowX) => updateMii({ eyebrowX })} />
+                <AdjustRow label="Size" value={mii.eyebrowSize} {...fflRanges.brows.scale} step={1} kind="size" onChange={(eyebrowSize) => updateMii({ eyebrowSize })} />
+                <AdjustRow label="Rotation" value={mii.eyebrowRotation} {...fflRanges.brows.rotate} step={1} kind="rotation" onChange={(eyebrowRotation) => updateMii({ eyebrowRotation })} />
                 <button className="reset-button" onClick={() => resetMii(eyebrowDefaults, "Eyebrow adjustments reset")} data-focusable>Reset</button>
               </> : <p className="adjust-intro">Needs the 3D preview.</p>}
             </>
@@ -1598,8 +1638,7 @@ export default function App() {
                 min={0}
                 max={fflCounts.eyeY - 1}
                 step={1}
-                leftIcon="down"
-                rightIcon="up"
+                kind="vertical"
                 onChange={(eyeY) => updateMii({ eyeY })}
               />
               <AdjustRow
@@ -1608,8 +1647,7 @@ export default function App() {
                 min={0}
                 max={fflCounts.eyeX - 1}
                 step={1}
-                leftIcon="left"
-                rightIcon="right"
+                kind="spacing"
                 onChange={(eyeX) => updateMii({ eyeX })}
               />
               <AdjustRow
@@ -1618,8 +1656,7 @@ export default function App() {
                 min={0}
                 max={fflCounts.eyeScale - 1}
                 step={1}
-                leftIcon="minus"
-                rightIcon="plus"
+                kind="size"
                 onChange={(eyeSize) => updateMii({ eyeSize })}
               />
               <AdjustRow
@@ -1628,8 +1665,7 @@ export default function App() {
                 min={0}
                 max={fflCounts.eyeRotate - 1}
                 step={1}
-                leftIcon="rotateLeft"
-                rightIcon="rotateRight"
+                kind="rotation"
                 onChange={(eyeRotation) => updateMii({ eyeRotation })}
               />
               <button
@@ -1649,8 +1685,8 @@ export default function App() {
                 <p className="adjust-intro">Pick a style first.</p>
               ) : fflRanges ? (
                 <>
-                  <AdjustRow label="Vertical position" value={mii.glassY} {...fflRanges.glasses.y} step={1} leftIcon="down" rightIcon="up" onChange={(glassY) => updateMii({ glassY })} />
-                  <AdjustRow label="Size" value={mii.glassSize} {...fflRanges.glasses.scale} step={1} leftIcon="minus" rightIcon="plus" onChange={(glassSize) => updateMii({ glassSize })} />
+                  <AdjustRow label="Vertical position" value={mii.glassY} {...fflRanges.glasses.y} step={1} kind="vertical" onChange={(glassY) => updateMii({ glassY })} />
+                  <AdjustRow label="Size" value={mii.glassSize} {...fflRanges.glasses.scale} step={1} kind="size" onChange={(glassSize) => updateMii({ glassSize })} />
                   <ColorControl custom={mii.glassCustom} onCustom={(glassCustom) => updateMii({ glassCustom })} value={mii.glassColor} onChange={(glassColor) => updateMii({ glassColor, glassCustom: null })} palette={glassPalette} label="Frame color" />
                   <button className="reset-button" onClick={() => resetMii({ glassY: 10, glassSize: 4, glassColor: 0, glassCustom: null }, "Glasses adjustments reset")} data-focusable>Reset</button>
                 </>
@@ -1663,8 +1699,8 @@ export default function App() {
                 <p className="adjust-intro">Pick a moustache to place it. Beards have no separate position.</p>
               ) : fflRanges ? (
                 <>
-                  <AdjustRow label="Vertical position" value={mii.mustacheY} {...fflRanges.mustache.y} step={1} leftIcon="down" rightIcon="up" onChange={(mustacheY) => updateMii({ mustacheY })} />
-                  <AdjustRow label="Size" value={mii.mustacheSize} {...fflRanges.mustache.scale} step={1} leftIcon="minus" rightIcon="plus" onChange={(mustacheSize) => updateMii({ mustacheSize })} />
+                  <AdjustRow label="Vertical position" value={mii.mustacheY} {...fflRanges.mustache.y} step={1} kind="vertical" onChange={(mustacheY) => updateMii({ mustacheY })} />
+                  <AdjustRow label="Size" value={mii.mustacheSize} {...fflRanges.mustache.scale} step={1} kind="size" onChange={(mustacheSize) => updateMii({ mustacheSize })} />
                   <button className="reset-button" onClick={() => resetMii({ mustacheY: 10, mustacheSize: 4 }, "Moustache adjustments reset")} data-focusable>Reset</button>
                 </>
               ) : <p className="adjust-intro">Needs the 3D preview.</p>}
@@ -1676,9 +1712,9 @@ export default function App() {
                 <p className="adjust-intro">Turn it on to place it.</p>
               ) : fflRanges ? (
                 <>
-                  <AdjustRow label="Vertical position" value={mii.moleY} {...fflRanges.mole.y} step={1} leftIcon="down" rightIcon="up" onChange={(moleY) => updateMii({ moleY })} />
-                  <AdjustRow label="Horizontal position" value={mii.moleX} {...fflRanges.mole.x} step={1} leftIcon="left" rightIcon="right" onChange={(moleX) => updateMii({ moleX })} />
-                  <AdjustRow label="Size" value={mii.moleSize} {...fflRanges.mole.scale} step={1} leftIcon="minus" rightIcon="plus" onChange={(moleSize) => updateMii({ moleSize })} />
+                  <AdjustRow label="Vertical position" value={mii.moleY} {...fflRanges.mole.y} step={1} kind="vertical" onChange={(moleY) => updateMii({ moleY })} />
+                  <AdjustRow label="Horizontal position" value={mii.moleX} {...fflRanges.mole.x} step={1} kind="horizontal" onChange={(moleX) => updateMii({ moleX })} />
+                  <AdjustRow label="Size" value={mii.moleSize} {...fflRanges.mole.scale} step={1} kind="size" onChange={(moleSize) => updateMii({ moleSize })} />
                   <button className="reset-button" onClick={() => resetMii({ moleX: 8, moleY: 8, moleSize: 4 }, "Mole adjustments reset")} data-focusable>Reset</button>
                 </>
               ) : <p className="adjust-intro">Needs the 3D preview.</p>}
@@ -1687,8 +1723,8 @@ export default function App() {
             <>
               <div className="adjust-title"><div><span className="eyebrow">Fine tune</span><h2>Nose</h2></div><span className="context-icon"><Icon name="nose" /></span></div>
               {fflRanges ? <>
-                <AdjustRow label="Vertical position" value={mii.noseY} {...fflRanges.nose.y} step={1} leftIcon="up" rightIcon="down" onChange={(noseY) => updateMii({ noseY })} />
-                <AdjustRow label="Size" value={mii.noseSize} {...fflRanges.nose.scale} step={1} leftIcon="minus" rightIcon="plus" onChange={(noseSize) => updateMii({ noseSize })} />
+                <AdjustRow label="Vertical position" value={mii.noseY} {...fflRanges.nose.y} step={1} kind="vertical" onChange={(noseY) => updateMii({ noseY })} />
+                <AdjustRow label="Size" value={mii.noseSize} {...fflRanges.nose.scale} step={1} kind="size" onChange={(noseSize) => updateMii({ noseSize })} />
                 <button className="reset-button" onClick={() => resetMii({ noseY: 9, noseSize: 4 }, "Nose adjustments reset")} data-focusable>Reset</button>
               </> : <p className="adjust-intro">Needs the 3D preview.</p>}
             </>
@@ -1696,8 +1732,8 @@ export default function App() {
             <>
               <div className="adjust-title"><div><span className="eyebrow">Fine tune</span><h2>Mouth</h2></div><span className="context-icon"><Icon name="mouth" /></span></div>
               {fflRanges ? <>
-                <AdjustRow label="Vertical position" value={mii.mouthY} {...fflRanges.mouth.y} step={1} leftIcon="up" rightIcon="down" onChange={(mouthY) => updateMii({ mouthY })} />
-                <AdjustRow label="Size" value={mii.mouthSize} {...fflRanges.mouth.scale} step={1} leftIcon="minus" rightIcon="plus" onChange={(mouthSize) => updateMii({ mouthSize })} />
+                <AdjustRow label="Vertical position" value={mii.mouthY} {...fflRanges.mouth.y} step={1} kind="vertical" onChange={(mouthY) => updateMii({ mouthY })} />
+                <AdjustRow label="Size" value={mii.mouthSize} {...fflRanges.mouth.scale} step={1} kind="size" onChange={(mouthSize) => updateMii({ mouthSize })} />
                 <button className="reset-button" onClick={() => resetMii({ mouthY: 13, mouthSize: 4 }, "Mouth adjustments reset")} data-focusable>Reset</button>
               </> : <p className="adjust-intro">Needs the 3D preview.</p>}
             </>
