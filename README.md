@@ -172,4 +172,4 @@ Make sure you are in the folder containing `package.json` and use a supported No
 
 ## Credits
 
-Created by the project team for an educational UI/UX redesign assignment. Original Wii and Mii concepts belong to Nintendo. This project is an unofficial educational prototype. See [asset and technology credits](CREDITS.md) for linked sources, contributors, and licenses, and [presentation notes](PRESENTATION-CURRENT.md) for the current prototype and its limitations.
+Created by the project team for an educational UI/UX redesign assignment. Original Wii and Mii concepts belong to Nintendo. This project is an unofficial educational prototype. See [asset and technology credits](CREDITS.md) for linked sources, contributors, and licenses. Class presentation notes and screenshots are kept locally for the course handoff and are not part of this repository.
